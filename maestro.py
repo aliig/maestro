@@ -6,55 +6,145 @@ from rich.panel import Panel
 from datetime import datetime
 import json
 from tavily import TavilyClient
+from functools import wraps
+from anthropic import RateLimitError
+import pickle
+import time
+import argparse
+from datetime import datetime, timezone
+import math
 
 # Set up the Anthropic API client
-client = Anthropic(api_key="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")
-
-# Available Claude models:
-# Claude 3 Opus     claude-3-opus-20240229
-# Claude 3 Sonnet   claude-3-sonnet-20240229
-# Claude 3 Haiku    claude-3-haiku-20240307
-# Claude 3.5 Sonnet claude-3-5-sonnet-20240620
+client = Anthropic(api_key="temp")
 
 ORCHESTRATOR_MODEL = "claude-3-5-sonnet-20240620"
 SUB_AGENT_MODEL = "claude-3-5-sonnet-20240620"
 REFINER_MODEL = "claude-3-5-sonnet-20240620"
 
-def calculate_subagent_cost(model, input_tokens, output_tokens):
-    # Pricing information per model
-    pricing = {
-        "claude-3-opus-20240229": {"input_cost_per_mtok": 15.00, "output_cost_per_mtok": 75.00},
-        "claude-3-haiku-20240307": {"input_cost_per_mtok": 0.25, "output_cost_per_mtok": 1.25},
-        "claude-3-sonnet-20240229": {"input_cost_per_mtok": 3.00, "output_cost_per_mtok": 15.00},
-        "claude-3-5-sonnet-20240620": {"input_cost_per_mtok": 3.00, "output_cost_per_mtok": 15.00},
-    }
+def save_checkpoint(checkpoint_file, full_structure, processed_structure, review_results):
+    with open(checkpoint_file, 'wb') as f:
+        pickle.dump((full_structure, processed_structure, review_results), f)
+    console.print(f"[bold green]Checkpoint saved to {checkpoint_file}[/bold green]")
 
-    # Calculate cost
-    input_cost = (input_tokens / 1_000_000) * pricing[model]["input_cost_per_mtok"]
-    output_cost = (output_tokens / 1_000_000) * pricing[model]["output_cost_per_mtok"]
-    total_cost = input_cost + output_cost
+def load_checkpoint(checkpoint_file):
+    if os.path.exists(checkpoint_file):
+        with open(checkpoint_file, 'rb') as f:
+            full_structure, processed_structure, review_results = pickle.load(f)
+        console.print(f"[bold green]Checkpoint loaded from {checkpoint_file}[/bold green]")
+        return full_structure, processed_structure, review_results
+    return None
 
-    return total_cost
+def parse_rfc3339(timestamp: str) -> datetime:
+    # Match timestamps with and without fractional seconds
+    pattern_with_fraction = re.compile(r"\.\d+Z$")
+    if pattern_with_fraction.search(timestamp):
+        return datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%S.%fZ").replace(tzinfo=timezone.utc)
+    else:
+        return datetime.strptime(timestamp, "%Y-%m-%dT%H:%M:%SZ").replace(tzinfo=timezone.utc)
+
+
+def retry_on_rate_limit(max_retries=5):
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            retries = 0
+            while retries < max_retries:
+                try:
+                    return func(*args, **kwargs)
+                except RateLimitError as e:
+                    retries += 1
+                    if retries == max_retries:
+                        raise e
+
+                    response = e.response
+                    headers = response.headers
+
+                    # Parse rate limit information from headers
+                    requests_remaining = int(headers.get('anthropic-ratelimit-requests-remaining', 0))
+                    tokens_remaining = int(headers.get('anthropic-ratelimit-tokens-remaining', 0))
+                    requests_reset = parse_rfc3339(headers.get('anthropic-ratelimit-requests-reset', ''))
+                    tokens_reset = parse_rfc3339(headers.get('anthropic-ratelimit-tokens-reset', ''))
+
+                    # Calculate wait times
+                    now = datetime.now(timezone.utc)
+                    requests_wait = max((requests_reset - now).total_seconds(), 0)
+                    tokens_wait = max((tokens_reset - now).total_seconds(), 0)
+
+                    # Choose the longer wait time
+                    wait_time = max(requests_wait, tokens_wait)
+
+                    # If we have a 'Retry-After' header, use that if it's longer
+                    retry_after = float(headers.get('retry-after', 0))
+                    wait_time = max(wait_time, retry_after)
+
+                    # Add a small buffer (e.g., 1 second) to ensure we're past the reset
+                    wait_time += 1
+
+                    console.print(f"[yellow]Rate limit reached. Retrying in {math.ceil(wait_time)} seconds...[/yellow]")
+                    console.print(f"[yellow]Requests remaining: {requests_remaining}, Tokens remaining: {tokens_remaining}[/yellow]")
+
+                    time.sleep(wait_time)
+
+            raise RateLimitError("Max retries reached")
+        return wrapper
+    return decorator
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(description="Agentic Code Review")
+    parser.add_argument("input_dir", help="Input directory of the Python project")
+    parser.add_argument("-o", "--output_dir", help="Output directory for the improved project (default: './output')")
+    parser.add_argument("--ignore", nargs="*", default=[], help="Directories to ignore")
+    parser.add_argument("--resume", action="store_true", help="Resume from last checkpoint if available")
+    args = parser.parse_args()
+
+    # Set default output directory if not specified
+    if not args.output_dir:
+        args.output_dir = os.path.join(os.getcwd(), "output")
+
+    return args
+
+args = parse_arguments()
+
+def read_project_structure(input_dir, ignore_dirs):
+    full_structure = {}
+    processed_structure = {}
+
+    for root, dirs, files in os.walk(input_dir):
+        rel_path = os.path.relpath(root, input_dir)
+        current_full_level = full_structure
+        current_processed_level = processed_structure
+
+        for part in rel_path.split(os.sep):
+            if part != '.':
+                current_full_level = current_full_level.setdefault(part, {})
+                if not any(ignored in root for ignored in ignore_dirs):
+                    current_processed_level = current_processed_level.setdefault(part, {})
+
+        for file in files:
+            current_full_level[file] = None  # Just marking the file's presence
+            if file.endswith('.py') and not any(ignored in root for ignored in ignore_dirs):
+                file_path = os.path.join(root, file)
+                with open(file_path, 'r') as f:
+                    current_processed_level[file] = f.read()
+
+    return full_structure, processed_structure
 
 # Initialize the Rich Console
 console = Console()
 
-def opus_orchestrator(objective, file_content=None, previous_results=None, use_search=False):
-    console.print(f"\n[bold]Calling Orchestrator for your objective[/bold]")
+@retry_on_rate_limit()
+def opus_orchestrator(full_structure, processed_structure, previous_results=None):
+    console.print(f"\n[bold]Calling Orchestrator for code review[/bold]")
     previous_results_text = "\n".join(previous_results) if previous_results else "None"
-    if file_content:
-        console.print(Panel(f"File content:\n{file_content}", title="[bold blue]File Content[/bold blue]", title_align="left", border_style="blue"))
 
     messages = [
         {
             "role": "user",
             "content": [
-                {"type": "text", "text": f"Based on the following objective{' and file content' if file_content else ''}, and the previous sub-task results (if any), please break down the objective into the next sub-task, and create a concise and detailed prompt for a subagent so it can execute that task. IMPORTANT!!! when dealing with code tasks make sure you check the code for errors and provide fixes and support as part of the next sub-task. If you find any bugs or have suggestions for better code, please include them in the next sub-task prompt. Please assess if the objective has been fully achieved. If the previous sub-task results comprehensively address all aspects of the objective, include the phrase 'The task is complete:' at the beginning of your response. If the objective is not yet fully achieved, break it down into the next sub-task and create a concise and detailed prompt for a subagent to execute that task.:\n\nObjective: {objective}" + ('\\nFile content:\\n' + file_content if file_content else '') + f"\n\nPrevious sub-task results:\n{previous_results_text}"}
+                {"type": "text", "text": f"Review the following Python project structure and provide the next code review task. Focus on improving code quality, completing unfinished features, and suggesting necessary changes. Be concise and prioritize the most important issues. Avoid generating extensive comments or example usage for methods/functions unless absolutely necessary.\n\nFull project structure:\n{json.dumps(full_structure, indent=2)}\n\nProcessed structure:\n{json.dumps(processed_structure, indent=2)}\n\nPrevious review results:\n{previous_results_text}"}
             ]
         }
     ]
-    if use_search:
-        messages[0]["content"].append({"type": "text", "text": "Please also generate a JSON object containing a single 'search_query' key, which represents a question that, when asked online, would yield important information for solving the subtask. The question should be specific and targeted to elicit the most relevant and helpful resources. Format your JSON like this, with no additional text before or after:\n{\"search_query\": \"<question>\"}\n"})
 
     opus_response = client.messages.create(
         model=ORCHESTRATOR_MODEL,
@@ -63,57 +153,24 @@ def opus_orchestrator(objective, file_content=None, previous_results=None, use_s
     )
 
     response_text = opus_response.content[0].text
-    console.print(f"Input Tokens: {opus_response.usage.input_tokens}, Output Tokens: {opus_response.usage.output_tokens}")
-    total_cost = calculate_subagent_cost(ORCHESTRATOR_MODEL, opus_response.usage.input_tokens, opus_response.usage.output_tokens)
-    console.print(f"Orchestrator Cost: ${total_cost:.4f}")
-
-    search_query = None
-    if use_search:
-        # Extract the JSON from the response
-        json_match = re.search(r'{.*}', response_text, re.DOTALL)
-        if json_match:
-            json_string = json_match.group()
-            try:
-                search_query = json.loads(json_string)["search_query"]
-                console.print(Panel(f"Search Query: {search_query}", title="[bold blue]Search Query[/bold blue]", title_align="left", border_style="blue"))
-                response_text = response_text.replace(json_string, "").strip()
-            except json.JSONDecodeError as e:
-                console.print(Panel(f"Error parsing JSON: {e}", title="[bold red]JSON Parsing Error[/bold red]", title_align="left", border_style="red"))
-                console.print(Panel(f"Skipping search query extraction.", title="[bold yellow]Search Query Extraction Skipped[/bold yellow]", title_align="left", border_style="yellow"))
-        else:
-            search_query = None
-
     console.print(Panel(response_text, title=f"[bold green]Opus Orchestrator[/bold green]", title_align="left", border_style="green", subtitle="Sending task to Haiku 👇"))
-    return response_text, file_content, search_query
+    return response_text
 
-def haiku_sub_agent(prompt, search_query=None, previous_haiku_tasks=None, use_search=False, continuation=False):
+@retry_on_rate_limit()
+def haiku_sub_agent(prompt, full_structure, processed_structure, previous_haiku_tasks=None):
     if previous_haiku_tasks is None:
         previous_haiku_tasks = []
 
-    continuation_prompt = "Continuing from the previous answer, please complete the response."
-    system_message = "Previous Haiku tasks:\n" + "\n".join(f"Task: {task['task']}\nResult: {task['result']}" for task in previous_haiku_tasks)
-    if continuation:
-        prompt = continuation_prompt
+    # Create a string representation of previous tasks
+    previous_tasks_str = "\n".join(f"Task {i+1}: {task}" for i, task in enumerate(previous_haiku_tasks))
+    system_message = f"Previous Haiku tasks:\n{previous_tasks_str}"
 
-    qna_response = None
-    if search_query and use_search:
-        # Initialize the Tavily client
-        tavily = TavilyClient(api_key="YOUR API KEY HERE")
-        # Perform a QnA search based on the search query
-        qna_response = tavily.qna_search(query=search_query)
-        console.print(f"QnA response: {qna_response}", style="yellow")
-
-    # Prepare the messages array with only the prompt initially
     messages = [
         {
             "role": "user",
-            "content": [{"type": "text", "text": prompt}]
+            "content": [{"type": "text", "text": f"{prompt}\n\nFull project structure:\n{json.dumps(full_structure, indent=2)}\n\nProcessed structure:\n{json.dumps(processed_structure, indent=2)}\n\nPlease provide a concise response focusing on the most critical changes. Avoid generating extensive comments or example usage for methods/functions unless absolutely necessary."}]
         }
     ]
-
-    # Add search results to the messages if there are any
-    if qna_response:
-        messages[0]["content"].append({"type": "text", "text": f"\nSearch Results:\n{qna_response}"})
 
     haiku_response = client.messages.create(
         model=SUB_AGENT_MODEL,
@@ -123,25 +180,17 @@ def haiku_sub_agent(prompt, search_query=None, previous_haiku_tasks=None, use_se
     )
 
     response_text = haiku_response.content[0].text
-    console.print(f"Input Tokens: {haiku_response.usage.input_tokens}, Output Tokens: {haiku_response.usage.output_tokens}")
-    total_cost = calculate_subagent_cost(SUB_AGENT_MODEL, haiku_response.usage.input_tokens, haiku_response.usage.output_tokens)
-    console.print(f"Sub-agent Cost: ${total_cost:.4f}")
-
-    if haiku_response.usage.output_tokens >= 4000:  # Threshold set to 4000 as a precaution
-        console.print("[bold yellow]Warning:[/bold yellow] Output may be truncated. Attempting to continue the response.")
-        continuation_response_text = haiku_sub_agent(prompt, search_query, previous_haiku_tasks, use_search, continuation=True)
-        response_text += continuation_response_text
-
     console.print(Panel(response_text, title="[bold blue]Haiku Sub-agent Result[/bold blue]", title_align="left", border_style="blue", subtitle="Task completed, sending result to Opus 👇"))
     return response_text
 
-def opus_refine(objective, sub_task_results, filename, projectname, continuation=False):
-    print("\nCalling Opus to provide the refined final output for your objective:")
+@retry_on_rate_limit()
+def opus_refine(full_structure, processed_structure, review_results):
+    print("\nCalling Opus to provide the final improved project structure:")
     messages = [
         {
             "role": "user",
             "content": [
-                {"type": "text", "text": "Objective: " + objective + "\n\nSub-task results:\n" + "\n".join(sub_task_results) + "\n\nPlease review and refine the sub-task results into a cohesive final output. Add any missing information or details as needed. When working on code projects, ONLY AND ONLY IF THE PROJECT IS CLEARLY A CODING ONE please provide the following:\n1. Project Name: Create a concise and appropriate project name that fits the project based on what it's creating. The project name should be no more than 20 characters long.\n2. Folder Structure: Provide the folder structure as a valid JSON object, where each key represents a folder or file, and nested keys represent subfolders. Use null values for files. Ensure the JSON is properly formatted without any syntax errors. Please make sure all keys are enclosed in double quotes, and ensure objects are correctly encapsulated with braces, separating items with commas as necessary.\nWrap the JSON object in <folder_structure> tags.\n3. Code Files: For each code file, include ONLY the file name NEVER EVER USE THE FILE PATH OR ANY OTHER FORMATTING YOU ONLY USE THE FOLLOWING format 'Filename: <filename>' followed by the code block enclosed in triple backticks, with the language identifier after the opening backticks, like this:\n\n​python\n<code>\n​"}
+                {"type": "text", "text": f"Based on the following project structures and code review results, provide an improved version of the project. Include necessary changes and improvements, focusing on the most critical issues. Be concise in your modifications and avoid generating extensive comments or example usage for methods/functions unless absolutely necessary.\n\nFull project structure:\n{json.dumps(full_structure, indent=2)}\n\nProcessed structure:\n{json.dumps(processed_structure, indent=2)}\n\nReview results:\n{review_results}\n\nPlease provide the improved project structure as a valid JSON object, where each key represents a folder or file, and nested keys represent subfolders. Use string values for file contents. Ensure the JSON is properly formatted without any syntax errors."}
             ]
         }
     ]
@@ -153,17 +202,24 @@ def opus_refine(objective, sub_task_results, filename, projectname, continuation
     )
 
     response_text = opus_response.content[0].text.strip()
-    console.print(f"Input Tokens: {opus_response.usage.input_tokens}, Output Tokens: {opus_response.usage.output_tokens}")
-    total_cost = calculate_subagent_cost(REFINER_MODEL, opus_response.usage.input_tokens, opus_response.usage.output_tokens)
-    console.print(f"Refine Cost: ${total_cost:.4f}")
+    console.print(Panel(response_text, title="[bold green]Final Improved Project Structure[/bold green]", title_align="left", border_style="green"))
+    return json.loads(response_text)
 
-    if opus_response.usage.output_tokens >= 4000 and not continuation:  # Threshold set to 4000 as a precaution
-        console.print("[bold yellow]Warning:[/bold yellow] Output may be truncated. Attempting to continue the response.")
-        continuation_response_text = opus_refine(objective, sub_task_results + [response_text], filename, projectname, continuation=True)
-        response_text += "\n" + continuation_response_text
+def write_improved_project(output_dir, improved_structure):
+    def create_folders_and_files(current_path, structure):
+        for key, value in structure.items():
+            path = os.path.join(current_path, key)
+            if isinstance(value, dict):
+                os.makedirs(path, exist_ok=True)
+                console.print(f"Created folder: [bold blue]{path}[/bold blue]")
+                create_folders_and_files(path, value)
+            else:
+                with open(path, 'w') as file:
+                    file.write(value)
+                console.print(f"Created/Updated file: [bold green]{path}[/bold green]")
 
-    console.print(Panel(response_text, title="[bold green]Final Output[/bold green]", title_align="left", border_style="green"))
-    return response_text
+    create_folders_and_files(output_dir, improved_structure)
+    console.print(f"\n[bold]Improved project structure written to: {output_dir}[/bold]")
 
 def create_folder_structure(project_name, folder_structure, code_blocks):
     # Create the project folder
@@ -199,105 +255,51 @@ def create_folders_and_files(current_path, structure, code_blocks):
             else:
                 console.print(Panel(f"Code content not found for file: [bold]{key}[/bold]", title="[bold yellow]Missing Code Content[/bold yellow]", title_align="left", border_style="yellow"))
 
-# Get the objective from user input
-objective = input("Please enter your objective: ")
 
-# Ask if the user wants to add a file
-add_file = input("Do you want to add a text file? (y/n): ").lower() == 'y'
+def main():
+    args = parse_arguments()
 
-file_content = None
-if add_file:
-    file_path = input("Please enter the file path: ")
-    try:
-        with open(file_path, 'r') as file:
-            file_content = file.read()
-        console.print(Panel(f"File content:\n{file_content}", title="[bold blue]File Content[/bold blue]", title_align="left", border_style="blue"))
-    except FileNotFoundError:
-        console.print(Panel("File not found. Proceeding without file content.", title="[bold red]File Error[/bold red]", title_align="left", border_style="red"))
-    except IOError:
-        console.print(Panel("Error reading file. Proceeding without file content.", title="[bold red]File Error[/bold red]", title_align="left", border_style="red"))
+    # Ensure the output directory exists
+    os.makedirs(args.output_dir, exist_ok=True)
 
-# Ask the user if they want to use search
-use_search = input("Do you want to use search? (y/n): ").lower() == 'y'
+    checkpoint_file = os.path.join(args.output_dir, 'review_checkpoint.pkl')
 
-task_exchanges = []
-haiku_tasks = []
-
-while True:
-    # Call Orchestrator to break down the objective into the next sub-task or provide the final output
-    previous_results = [result for _, result in task_exchanges]
-    if not task_exchanges:
-        # Pass the file content only in the first iteration if available
-        opus_result, file_content_for_haiku, search_query = opus_orchestrator(objective, file_content, previous_results, use_search)
+    # Try to load from checkpoint
+    checkpoint_data = load_checkpoint(checkpoint_file)
+    if checkpoint_data:
+        full_structure, processed_structure, review_results = checkpoint_data
     else:
-        opus_result, _, search_query = opus_orchestrator(objective, previous_results=previous_results, use_search=use_search)
+        full_structure, processed_structure = read_project_structure(args.input_dir, args.ignore)
+        review_results = []
 
-    if "The task is complete:" in opus_result:
-        # If Opus indicates the task is complete, exit the loop
-        final_output = opus_result.replace("The task is complete:", "").strip()
-        break
-    else:
-        sub_task_prompt = opus_result
-        # Append file content to the prompt for the initial call to haiku_sub_agent, if applicable
-        if file_content_for_haiku and not haiku_tasks:
-            sub_task_prompt = f"{sub_task_prompt}\n\nFile content:\n{file_content_for_haiku}"
-        # Call haiku_sub_agent with the prepared prompt, search query, and record the result
-        sub_task_result = haiku_sub_agent(sub_task_prompt, search_query, haiku_tasks, use_search)
-        # Log the task and its result for future reference
-        haiku_tasks.append({"task": sub_task_prompt, "result": sub_task_result})
-        # Record the exchange for processing and output generation
-        task_exchanges.append((sub_task_prompt, sub_task_result))
-        # Prevent file content from being included in future haiku_sub_agent calls
-        file_content_for_haiku = None
-
-# Create the .md filename
-sanitized_objective = re.sub(r'\W+', '_', objective)
-timestamp = datetime.now().strftime("%H-%M-%S")
-
-# Call Opus to review and refine the sub-task results
-refined_output = opus_refine(objective, [result for _, result in task_exchanges], timestamp, sanitized_objective)
-
-# Extract the project name from the refined output
-project_name_match = re.search(r'Project Name: (.*)', refined_output)
-project_name = project_name_match.group(1).strip() if project_name_match else sanitized_objective
-
-# Extract the folder structure from the refined output
-folder_structure_match = re.search(r'<folder_structure>(.*?)</folder_structure>', refined_output, re.DOTALL)
-folder_structure = {}
-if folder_structure_match:
-    json_string = folder_structure_match.group(1).strip()
     try:
-        folder_structure = json.loads(json_string)
-    except json.JSONDecodeError as e:
-        console.print(Panel(f"Error parsing JSON: {e}", title="[bold red]JSON Parsing Error[/bold red]", title_align="left", border_style="red"))
-        console.print(Panel(f"Invalid JSON string: [bold]{json_string}[/bold]", title="[bold red]Invalid JSON String[/bold red]", title_align="left", border_style="red"))
+        iteration = 0
+        while True:
+            orchestrator_result = opus_orchestrator(full_structure, processed_structure, review_results)
+            if "The review is complete:" in orchestrator_result:
+                break
+            sub_agent_result = haiku_sub_agent(orchestrator_result, full_structure, processed_structure, review_results)
+            review_results.append(sub_agent_result)
 
-# Extract code files from the refined output
-code_blocks = re.findall(r'Filename: (\S+)\s*```[\w]*\n(.*?)\n```', refined_output, re.DOTALL)
+            # Save checkpoint every 5 iterations (you can adjust this number)
+            iteration += 1
+            if iteration % 5 == 0:
+                save_checkpoint(checkpoint_file, full_structure, processed_structure, review_results)
 
-# Create the folder structure and code files
-create_folder_structure(project_name, folder_structure, code_blocks)
+        improved_structure = opus_refine(full_structure, processed_structure, "\n".join(review_results))
+        write_improved_project(args.output_dir, improved_structure)
 
-# Truncate the sanitized_objective to a maximum of 50 characters
-max_length = 25
-truncated_objective = sanitized_objective[:max_length] if len(sanitized_objective) > max_length else sanitized_objective
+        # Clear the checkpoint file as the process is complete
+        if os.path.exists(checkpoint_file):
+            os.remove(checkpoint_file)
 
-# Update the filename to include the project name
-filename = f"{timestamp}_{truncated_objective}.md"
+        console.print(f"\n[bold green]Code review and improvements complete. Results written to: {args.output_dir}[/bold green]")
+    except Exception as e:
+        console.print(f"[bold red]An error occurred: {str(e)}[/bold red]")
+        console.print("[yellow]Saving current state to checkpoint...[/yellow]")
+        save_checkpoint(checkpoint_file, full_structure, processed_structure, review_results)
+        console.print("[green]You can resume the process later by running the script again.[/green]")
+        raise
 
-# Prepare the full exchange log
-exchange_log = f"Objective: {objective}\n\n"
-exchange_log += "=" * 40 + " Task Breakdown " + "=" * 40 + "\n\n"
-for i, (prompt, result) in enumerate(task_exchanges, start=1):
-    exchange_log += f"Task {i}:\n"
-    exchange_log += f"Prompt: {prompt}\n"
-    exchange_log += f"Result: {result}\n\n"
-
-exchange_log += "=" * 40 + " Refined Final Output " + "=" * 40 + "\n\n"
-exchange_log += refined_output
-
-console.print(f"\n[bold]Refined Final output:[/bold]\n{refined_output}")
-
-with open(filename, 'w') as file:
-    file.write(exchange_log)
-print(f"\nFull exchange log saved to {filename}")
+if __name__ == "__main__":
+    main()
