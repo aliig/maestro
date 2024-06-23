@@ -1,0 +1,53 @@
+orchestrator:
+  base: |
+    Review the following GitHub repository structure and provide the next code review task.
+    Focus on {focus_areas}.
+    {ignore_areas}
+    Be concise and prioritize the most important issues.
+    Review depth: {review_depth}
+
+    Repository structure:
+    {repo_structure}
+
+    Previous review results:
+    {previous_results}
+
+    If the review is complete, include the phrase "REVIEW_COMPLETE" in your response.
+
+  focus_areas:
+    optimization: "improving code efficiency and performance"
+    documentation: "adding or improving comments and docstrings"
+    testing: "adding or improving unit tests"
+    features: "suggesting new features or enhancements"
+    security: "identifying and addressing security vulnerabilities"
+    code_quality: "improving overall code quality and readability"
+
+  ignore_message: "Do not focus on {ignore_areas}."
+
+  review_depths:
+    minimum: "Provide a quick overview of the most critical issues."
+    balanced: "Provide a balanced review, covering important issues without going into excessive detail."
+    comprehensive: "Provide a thorough and detailed review, covering all aspects of the code."
+
+
+sub_agent:
+  base: |
+    Based on the following task, provide specific code changes or additions to address the issue.
+    Be concise and focus on the most critical changes.
+
+    Task: {task}
+
+    Repository structure:
+    {repo_structure}
+
+    Provide your response in the following format:
+    - To create or modify a file:
+      [FILE_PATH]
+      ```python
+      # Your code changes here
+      ```
+
+    - To delete a file:
+      DELETE: FILE_PATH
+
+    If multiple files need to be changed, repeat the above format for each file.

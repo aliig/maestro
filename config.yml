@@ -1,0 +1,26 @@
+github_token: "your_github_token_here"
+
+ai_keys:
+  anthropic:
+    - "your_anthropic_api_key_1_here"
+    - "your_anthropic_api_key_2_here"
+  openai:
+    - "your_openai_api_key_1_here"
+    - "your_openai_api_key_2_here"
+
+ai_platforms:
+  claude:
+    provider: "anthropic"
+    model: "claude-3-5-sonnet-20240620"
+    max_tokens: 4096
+  gpt4:
+    provider: "openai"
+    model: "gpt-4"
+    max_tokens: 8192
+
+review_settings:
+  max_files_per_review: 10
+  max_review_iterations: 20
+  enable_auto_fix: true
+
+max_retries: 3
