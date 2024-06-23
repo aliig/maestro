@@ -8,7 +8,7 @@ import json
 from tavily import TavilyClient
 
 # Set up the Anthropic API client
-client = Anthropic(api_key="YOUR KEY")
+client = Anthropic(api_key="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")
 
 # Available Claude models:
 # Claude 3 Opus     claude-3-opus-20240229
@@ -44,7 +44,7 @@ def opus_orchestrator(objective, file_content=None, previous_results=None, use_s
     previous_results_text = "\n".join(previous_results) if previous_results else "None"
     if file_content:
         console.print(Panel(f"File content:\n{file_content}", title="[bold blue]File Content[/bold blue]", title_align="left", border_style="blue"))
-    
+
     messages = [
         {
             "role": "user",
