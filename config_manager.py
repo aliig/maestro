@@ -1,3 +1,4 @@
+import os
 from typing import Any, Dict
 
 import yaml
@@ -8,10 +9,23 @@ class ConfigValidationError(Exception):
 
 
 class ConfigManager:
-    def __init__(self, config_file: str):
+    def __init__(self, config_file):
         with open(config_file, "r") as f:
             self.config = yaml.safe_load(f)
-        self.validate_config()
+
+        # Load keys from keys.yml if it exists, otherwise use environment variables
+        keys_file = "keys.yml"
+        if os.path.exists(keys_file):
+            with open(keys_file, "r") as f:
+                self.keys = yaml.safe_load(f)
+        else:
+            self.keys = {
+                "github_token": os.environ.get("GITHUB_TOKEN"),
+                "ai_keys": {
+                    "anthropic": os.environ.get("ANTHROPIC_API_KEY", "").split(","),
+                    "openai": os.environ.get("OPENAI_API_KEY", "").split(","),
+                },
+            }
 
     def validate_config(self):
         required_keys = ["github_token", "ai_keys", "ai_platforms"]
@@ -33,17 +47,20 @@ class ConfigManager:
                         f"Missing required key in platform config for {platform}: {key}"
                     )
 
-    def get_github_token(self) -> str:
-        return self.config["github_token"]
+    def get_github_token(self):
+        return self.keys["github_token"]
 
-    def get_ai_keys(self) -> Dict[str, str]:
-        return self.config["ai_keys"]
+    def get_ai_keys(self):
+        return self.keys["ai_keys"]
 
     def get_ai_platforms(self) -> Dict[str, Dict[str, Any]]:
         return self.config["ai_platforms"]
 
-    def get_review_settings(self) -> Dict[str, Any]:
-        return self.config.get("review_settings", {})
+    def get_review_settings(self, depth):
+        review_settings = self.config["review_settings"]
+        depth_settings = review_settings["depth"][depth]
+        depth_settings["token_budget"] = review_settings["token_budget"]
+        return depth_settings
 
     def get_value(self, key: str, default: Any = None) -> Any:
         return self.config.get(key, default)

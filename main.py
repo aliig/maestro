@@ -26,6 +26,18 @@ def parse_arguments():
     parser.add_argument(
         "--config", default="config.yml", help="Path to the configuration file"
     )
+    parser.add_argument(
+        "--file_types",
+        nargs="+",
+        default=[".py", ".js", ".java", ".cs", ".cpp", ".h", ".rb", ".go"],
+        help="File types to include in the review",
+    )
+    parser.add_argument(
+        "--exclude_dirs",
+        nargs="+",
+        default=[],
+        help="Directories to exclude from the review",
+    )
     return parser.parse_args()
 
 
@@ -74,9 +86,14 @@ def main():
     logger.info(f"Starting AI-Powered Code Review for {args.repo_url}")
 
     config_manager = ConfigManager(args.config)
-    github_handler = GitHubHandler(args.repo_url, config_manager.get_github_token())
+    github_handler = GitHubHandler(
+        args.repo_url,
+        config_manager.get_github_token(),
+        file_types=args.file_types,
+        exclude_dirs=args.exclude_dirs,
+    )
     prompt_manager = PromptManager("prompts.yml")
-    ai_manager = AIManager(config_manager)
+    ai_manager = AIManager(config_manager, args.review_depth)
 
     change_types = get_user_preferences()
 
@@ -88,7 +105,11 @@ def main():
         repo_structure = github_handler.get_repo_structure()
         previous_results = []
 
+    original_structure = repo_structure.copy()
+    original_readme = github_handler.get_readme_content()
+
     review_complete = False
+    changes_summary = []
 
     try:
         with Progress() as progress:
@@ -118,6 +139,9 @@ def main():
                 changes = parse_sub_agent_result(sub_agent_result)
 
                 github_handler.commit_changes(changes)
+                changes_summary.append(
+                    f"- Iteration {len(previous_results) + 1}: {sum(len(details) for details in changes.values())} operation(s) performed"
+                )
                 previous_results.append(sub_agent_result)
 
                 save_checkpoint(checkpoint_file, repo_structure, previous_results)
@@ -126,9 +150,22 @@ def main():
 
         logger.info("Code review complete!")
 
+        # Get the new project structure
+        new_structure = github_handler.get_repo_structure()
+
+        # Generate changes summary and README updates
+        changes_summary_text = "\n".join(changes_summary)
+        pr_description, new_readme_content = (
+            ai_manager.analyze_changes_and_update_readme(
+                original_structure, new_structure, original_readme, changes_summary_text
+            )
+        )
+
+        # Update README with AI-suggested changes
+        github_handler.update_readme(new_readme_content)
+
         pr_url = github_handler.create_pull_request(
-            "AI Code Review Changes",
-            "This pull request contains changes suggested by the AI code review.",
+            "AI Code Review Changes", pr_description
         )
         logger.info(f"Pull request created: {pr_url}")
 
@@ -148,26 +185,30 @@ def main():
 
 
 def parse_sub_agent_result(result):
-    changes = {}
+    changes = {"modify": {}, "delete": [], "rename": {}, "mkdir": []}
     current_file = None
     current_content = []
 
     for line in result.split("\n"):
-        if line.startswith("[") and line.endswith("]"):
+        if line.startswith("MODIFY:") or line.startswith("CREATE:"):
             if current_file:
-                changes[current_file] = (
-                    "\n".join(current_content) if current_content else None
-                )
-            current_file = line[1:-1]
+                changes["modify"][current_file] = "\n".join(current_content)
+            current_file = line.split(":")[1].strip()
             current_content = []
         elif line.startswith("DELETE:"):
             file_to_delete = line.split("DELETE:")[1].strip()
-            changes[file_to_delete] = None
+            changes["delete"].append(file_to_delete)
+        elif line.startswith("RENAME:"):
+            old_path, new_path = line.split("RENAME:")[1].strip().split(" -> ")
+            changes["rename"][old_path.strip()] = new_path.strip()
+        elif line.startswith("MKDIR:"):
+            dir_to_create = line.split("MKDIR:")[1].strip()
+            changes["mkdir"].append(dir_to_create)
         elif current_file:
             current_content.append(line)
 
     if current_file:
-        changes[current_file] = "\n".join(current_content) if current_content else None
+        changes["modify"][current_file] = "\n".join(current_content)
 
     return changes
 
