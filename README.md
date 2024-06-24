@@ -11,6 +11,7 @@ AI-Powered Code Review is an automated tool that leverages artificial intelligen
 - Automatic exclusion of binary files
 - Resumable reviews with checkpoint system
 - Configurable review depth and token budget
+- Interactive prompt-based user interface
 
 ## Prerequisites
 
@@ -32,16 +33,21 @@ conda activate ai-code-review
 
 ## Configuration
 
-1. Edit `keys.yml` and add your API keys:
+1. Edit `config.yml` and add your API keys:
 ```yaml
 github_token: "your_github_token_here"
-ai_keys:
-    anthropic:
-    - "your_anthropic_api_key_1_here"
-    - "your_anthropic_api_key_2_here"
-    openai:
-    - "your_openai_api_key_1_here"
-    - "your_openai_api_key_2_here"
+
+ai_platforms:
+  - provider: "anthropic"
+    model: "claude-3-5-sonnet-20240620"
+    max_tokens: 4096
+    keys:
+    - "your_anthropic_api_key_here"
+  - provider: "openai"
+    model: "gpt-4"
+    max_tokens: 8192
+    keys:
+    - "your_openai_api_key_here"
 ```
 
 Alternatively, you can set the following environment variables:
@@ -52,40 +58,37 @@ Alternatively, you can set the following environment variables:
 
 ## Usage
 
-Run the main script with the GitHub repository URL you want to review:
+Run the main script:
 ```bash
-python main.py https://github.com/username/repo-to-review
+python main.py
 ```
 
-Additional options:
+The tool will prompt you for the following information:
+- GitHub repository URL
+- Review depth (minimum/balanced/comprehensive)
+- Code review preferences (optimization, documentation, testing, etc.)
+- Additional review instructions (optional)
 
-- `--review_depth`: Choose between "minimum", "balanced", or "comprehensive" (default: "balanced")
-- `--config`: Specify a custom config file path (default: "config.yml")
-- `--max_file_size`: Set maximum file size to review in bytes (default: 1MB)
-
-Example with options:
-```bash
-python main.py https://github.com/username/repo-to-review --review_depth comprehensive --max_file_size 2097152
-```
+The tool will then perform the code review based on your inputs and create a pull request with the suggested changes.
 
 ## Customizing Review Scope
 
 Create a `.aireviews` file in the root of the repository you're reviewing to customize which files are included or excluded:
-    ```
-    ### Include all files by default
-    *
+```
+### Include all files by default
+*
 
-    ### Exclude specific directories
-    node_modules/
-    vendor/
+### Exclude specific directories
+node_modules/
+vendor/
 
-    ### Exclude specific file types
-    *.log
-    *.tmp
+### Exclude specific file types
+*.log
+*.tmp
 
-    ### Include a specific file that would otherwise be excluded
-    !important_config.log
-    ```
+### Include a specific file that would otherwise be excluded
+!important_config.log
+```
 
 ## Contributing
 
