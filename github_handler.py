@@ -70,34 +70,27 @@ class GitHubHandler:
         return "File not found or not accessible"
 
     def get_repo_structure(self):
-        structure = {}
-        try:
-            for root, dirs, files in os.walk(self.local_path):
-                if ".git" in dirs:
-                    dirs.remove(".git")
+        for root, dirs, files in os.walk(self.local_path):
+            if ".git" in dirs:
+                dirs.remove(".git")
 
-                path = root.split(os.sep)
-                current_level = structure
-                for folder in path[path.index(os.path.basename(self.local_path)) + 1:]:
-                    current_level = current_level.setdefault(folder, {})
+            for file in files:
+                if self.should_include_file(file):
+                    file_path = os.path.join(root, file)
+                    relative_path = os.path.relpath(file_path, self.local_path)
+                    if os.path.getsize(file_path) <= self.max_file_size and not self.is_binary_file(file_path):
+                        yield relative_path, self.lazy_load_file_content(file_path)
+                    else:
+                        yield relative_path, "<<< File too large or binary >>>"
 
-                for file in files:
-                    if self.should_include_file(file):
-                        file_path = os.path.join(root, file)
-                        relative_path = os.path.relpath(file_path, self.local_path)
-                        if os.path.getsize(file_path) <= self.max_file_size and not self.is_binary_file(file_path):
-                            try:
-                                with open(file_path, "r", encoding="utf-8") as f:
-                                    content = f.read()
-                                current_level[relative_path] = content
-                            except UnicodeDecodeError:
-                                current_level[relative_path] = "<<< Unable to decode file content >>>"
-                        else:
-                            current_level[relative_path] = "<<< File too large or binary >>>"
-            return structure
-        except Exception as e:
-            logger.error(f"Error getting repository structure: {str(e)}")
-            raise
+    def lazy_load_file_content(self, file_path):
+        def load_content():
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    return f.read()
+            except UnicodeDecodeError:
+                return "<<< Unable to decode file content >>>"
+        return load_content
 
     def should_include_file(self, filename):
         return any(
