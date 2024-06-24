@@ -107,7 +107,7 @@ class AIManager:
                 elif provider == "openai":
                     ai_platforms.append(OpenAIGPT(key, model))
                 else:
-                    raise Exception(f"Invalid AI provider: {provider}")
+                    raise ValueError(f"Invalid AI provider: {provider}")
 
         return ai_platforms
 
