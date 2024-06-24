@@ -98,10 +98,11 @@ class AIManager:
                 elif provider == "openai":
                     ai_platforms.append(OpenAIGPT(key, model, max_tokens))
                 else:
-                    raise Exception(f"Invalid AI provider: {provider}")
+                    raise ValueError(f"Invalid AI provider: {provider}")
 
         return ai_platforms
 
+    @classmethod
     def _call_ai_with_retry(cls, platform, prompt: str, max_tokens: int):
         try:
             return platform.call_ai(prompt, max_tokens)
@@ -120,7 +121,7 @@ class AIManager:
 
     def call_ai(self, prompt: str) -> str:
         if self.tokens_used >= self.review_settings["token_budget"]:
-            raise Exception("Token budget exceeded. Review process halted.")
+            raise ValueError("Token budget exceeded. Review process halted.")
 
         max_tokens = min(
             self.review_settings["max_tokens_per_call"],
@@ -131,14 +132,12 @@ class AIManager:
             current_platform = self.platform_queue[0]
             try:
                 result = self._call_ai_with_retry(current_platform, prompt, max_tokens)
-                self.tokens_used += self._estimate_tokens(
-                    prompt
-                ) + self._estimate_tokens(result)
+                self.tokens_used += self._estimate_tokens(prompt) + self._estimate_tokens(result)
                 return result
             except Exception:
                 self.platform_queue.rotate(-1)  # Move the current platform to the end
 
-        raise Exception("All AI platforms exhausted. Unable to complete the request.")
+        raise RuntimeError("All AI platforms exhausted. Unable to complete the request.")
 
     def _estimate_tokens(self, text: str) -> int:
         return len(self.token_encoder.encode(text))
