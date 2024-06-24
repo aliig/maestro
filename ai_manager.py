@@ -8,8 +8,9 @@ from typing import Any, Dict, List
 
 import anthropic
 import openai
-import tiktoken
 from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
+
+from logger import logger
 
 
 class AIInterface(ABC):
@@ -29,7 +30,9 @@ class AnthropicAI(AIInterface):
 
     def call_ai(self, prompt: SyntaxError) -> str:
         response = self.client.messages.create(
-            model=self.model, messages=[{"role": "user", "content": prompt}]
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=10000,
         )
         return response.content[0].text
 
@@ -55,7 +58,9 @@ class OpenAIGPT(AIInterface):
 
     def call_ai(self, prompt: str) -> str:
         response = self.client.chat.completions.create(
-            model=self.model, messages=[{"role": "user", "content": prompt}]
+            model=self.model,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=10000,
         )
         return response.choices[0].message.content
 
@@ -119,7 +124,8 @@ class AIManager:
             try:
                 result = self._call_ai_with_retry(current_platform, prompt)
                 return result
-            except Exception:
+            except Exception as e:
+                logger.warning(f"Error {e}")
                 self.platform_queue.rotate(-1)  # Move the current platform to the end
 
         raise Exception("All AI platforms exhausted. Unable to complete the request.")
