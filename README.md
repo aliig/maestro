@@ -12,6 +12,7 @@ AI-Powered Code Review is an automated tool that leverages artificial intelligen
 - Resumable reviews with checkpoint system
 - Configurable review depth and token budget
 - Interactive user input for review configuration
+- Improved token encoding for better compatibility across AI models
 
 ## Prerequisites
 
@@ -66,7 +67,7 @@ The script will interactively prompt you for the following information:
 
 1. GitHub repository URL
 2. Review depth (minimum, balanced, or comprehensive)
-3. Maximum file size to review in bytes
+3. Maximum file size to review in megabytes
 
 Follow the prompts to configure your code review process.
 
@@ -89,6 +90,10 @@ vendor/
 !important_config.log
 ```
 
+## Error Handling
+
+The tool now includes improved error handling, with more specific exception types for better debugging and robustness.
+
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
@@ -96,3 +101,9 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ## License
 
 [Add your chosen license here]
+
+## Changelog
+
+### Latest Changes
+- Updated token encoding to use a more general-purpose method, improving compatibility across different AI models.
+- Enhanced error handling in the AI manager component for better stability and debugging.
