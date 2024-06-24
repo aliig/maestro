@@ -116,6 +116,8 @@ def perform_code_review(
             additional_instructions,
         )
         orchestrator_result = ai_manager.call_ai(orchestrator_prompt)
+        logger.info(f"Orchestrator prompt: {orchestrator_prompt}")
+        logger.info(f"Orchestrator result: {orchestrator_result}")
 
         parsed_result = parse_orchestrator_response(orchestrator_result)
 
