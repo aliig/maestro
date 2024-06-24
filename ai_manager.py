@@ -32,7 +32,7 @@ class AnthropicAI(AIInterface):
         response = self.client.messages.create(
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=10000,
+            max_tokens=4096,
         )
         return response.content[0].text
 
@@ -60,7 +60,7 @@ class OpenAIGPT(AIInterface):
         response = self.client.chat.completions.create(
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
-            max_tokens=10000,
+            max_tokens=4096,
         )
         return response.choices[0].message.content
 
