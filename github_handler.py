@@ -24,6 +24,9 @@ class GitHubHandler:
                 raise ValueError(f"Invalid repository URL format: {repo_url}")
             owner, repo_name = path_parts[-2:]
             self.repo = self.g.get_repo(f"{owner}/{repo_name}")
+        except GithubException as e:
+            logger.error(f"GitHub API error: {e.status} - {e.data.get('message', 'Unknown error')}")
+            raise
         except Exception as e:
             logger.error(f"Error accessing repository: {str(e)}")
             raise ValueError(f"Error accessing repository: {str(e)}")
@@ -88,6 +91,7 @@ class GitHubHandler:
                 with open(file_path, "r", encoding="utf-8") as f:
                     return f.read()
             except UnicodeDecodeError:
+                logger.warning(f"Unable to decode file content: {file_path}")
                 return "<<< Unable to decode file content >>>"
         return load_content
 
@@ -176,6 +180,9 @@ class GitHubHandler:
             )
             logger.info(f"Created pull request: {pr.html_url}")
             return pr.html_url
+        except GithubException as e:
+            logger.error(f"GitHub API error creating pull request: {e.status} - {e.data.get('message', 'Unknown error')}")
+            raise
         except Exception as e:
             logger.error(f"Error creating pull request: {str(e)}")
             raise
