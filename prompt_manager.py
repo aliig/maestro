@@ -15,6 +15,7 @@ class PromptManager:
         preferences,
         previous_results,
         additional_instructions,
+        file_state,
     ):
         base_prompt = self.prompts["orchestrator"]["base"]
         all_areas = set(self.prompts["orchestrator"]["focus_areas"].keys())
@@ -41,6 +42,10 @@ class PromptManager:
 
         depth_description = self.prompts["orchestrator"]["review_depths"][review_depth]
 
+        file_state_text = "\n".join(
+            [f"{path}: {state}" for path, state in file_state.items()]
+        )
+
         return base_prompt.format(
             focus_areas=focus_areas_text,
             ignore_areas=ignore_areas_text,
@@ -48,6 +53,7 @@ class PromptManager:
             repo_structure=json.dumps(repo_structure, indent=2),
             previous_results=previous_results,
             additional_instructions=additional_instructions,
+            file_state=file_state_text,
         )
 
     def get_sub_agent_prompt(self, task, repo_structure):

@@ -122,18 +122,34 @@ class GitHubHandler:
         except:
             return True
 
+    def get_current_file_path(self, original_path):
+        # Check if the file exists at the original path
+        if os.path.exists(os.path.join(self.local_path, original_path)):
+            return original_path
+
+        # If not, search for the file in the repository
+        for root, dirs, files in os.walk(self.local_path):
+            if os.path.basename(original_path) in files:
+                return os.path.relpath(
+                    os.path.join(root, os.path.basename(original_path)), self.local_path
+                )
+
+        # If file not found, return the original path
+        return original_path
+
     def commit_changes(self, changes):
         repo = Repo(self.local_path)
         try:
             for operation, details in changes.items():
                 if operation == "modify":
                     for file_path, content in details.items():
-                        full_path = os.path.join(self.local_path, file_path)
+                        new_path = self.get_current_file_path(file_path)
+                        full_path = os.path.join(self.local_path, new_path)
                         processed_content = preprocess_ai_response(content)
                         os.makedirs(os.path.dirname(full_path), exist_ok=True)
                         with open(full_path, "w", encoding="utf-8") as f:
                             f.write(processed_content)
-                        repo.index.add([file_path])
+                        repo.index.add([new_path])
                 elif operation == "delete":
                     for file_path in details:
                         full_path = os.path.join(self.local_path, file_path)

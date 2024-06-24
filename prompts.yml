@@ -16,6 +16,11 @@ orchestrator:
     Additional instructions:
     {additional_instructions}
 
+    Current file state and locations:
+    {file_state}
+
+    Please consider the current state and locations of files when suggesting modifications. You can suggest further changes to previously modified files if needed, but be aware of their current locations and states.
+
     Provide your response in the following format:
 
     STATUS: [IN_PROGRESS or COMPLETE]
