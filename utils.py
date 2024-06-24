@@ -84,21 +84,29 @@ def get_user_preferences() -> (
         max_file_size_mb,
         include_patterns,
         exclude_patterns,
-        None,
-        [],
+        None,  # repo_structure
+        [],  # previous_results
     )
 
 
 def load_checkpoint(
     checkpoint_file: str,
-) -> Tuple[Dict[str, bool], str, str, float, List[str], List[str], Dict, List[str]]:
+) -> Tuple[Dict[str, bool], str, str, Dict, List[str]]:
     with open(checkpoint_file, "rb") as f:
         data = pickle.load(f)
     console.print(f"Checkpoint loaded from {checkpoint_file}")
     return data
 
 
-def save_checkpoint(checkpoint_file: str, data: Tuple):
+def save_checkpoint(
+    checkpoint_file: str,
+    preferences: Dict[str, bool],
+    review_depth: str,
+    repo_url: str,
+    repo_structure: Dict,
+    previous_results: List[str],
+):
+    data = (preferences, review_depth, repo_url, repo_structure, previous_results)
     with open(checkpoint_file, "wb") as f:
         pickle.dump(data, f)
     console.print(f"Checkpoint saved to {checkpoint_file}")
