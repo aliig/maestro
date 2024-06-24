@@ -25,6 +25,7 @@ class GitHubHandler:
             owner, repo_name = path_parts[-2:]
             self.repo = self.g.get_repo(f"{owner}/{repo_name}")
         except Exception as e:
+            logger.error(f"Error accessing repository: {str(e)}")
             raise ValueError(f"Error accessing repository: {str(e)}")
 
         self.local_path = None
@@ -33,57 +34,73 @@ class GitHubHandler:
         self.create_new_branch()
 
     def clone_repo(self):
-        self.local_path = tempfile.mkdtemp()
-        clone_url = self.repo.clone_url.replace(
-            "https://", f"https://x-access-token:{self.token}@"
-        )
-        Repo.clone_from(clone_url, self.local_path)
-        logger.info(f"Repository cloned to {self.local_path}")
+        try:
+            self.local_path = tempfile.mkdtemp()
+            clone_url = self.repo.clone_url.replace(
+                "https://", f"https://x-access-token:{self.token}@"
+            )
+            Repo.clone_from(clone_url, self.local_path)
+            logger.info(f"Repository cloned to {self.local_path}")
+        except Exception as e:
+            logger.error(f"Error cloning repository: {str(e)}")
+            raise
 
     def create_new_branch(self):
-        repo = Repo(self.local_path)
-        current = repo.create_head(self.branch_name)
-        current.checkout()
-        logger.info(f"Created and checked out new branch: {self.branch_name}")
+        try:
+            repo = Repo(self.local_path)
+            current = repo.create_head(self.branch_name)
+            current.checkout()
+            logger.info(f"Created and checked out new branch: {self.branch_name}")
+        except Exception as e:
+            logger.error(f"Error creating new branch: {str(e)}")
+            raise
 
     def get_file_content(self, file_path):
         full_path = os.path.join(self.local_path, file_path)
         if os.path.exists(full_path) and self.should_include_file(file_path):
-            with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
-                return f.read()
+            try:
+                with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
+                    return f.read()
+            except Exception as e:
+                logger.error(f"Error reading file {file_path}: {str(e)}")
+                return "Error reading file content"
         return "File not found or not accessible"
 
     def get_repo_structure(self):
         structure = {}
-        for root, dirs, files in os.walk(self.local_path):
-            if ".git" in dirs:
-                dirs.remove(".git")
+        try:
+            for root, dirs, files in os.walk(self.local_path):
+                if ".git" in dirs:
+                    dirs.remove(".git")
 
-            path = root.split(os.sep)
-            current_level = structure
-            for folder in path[path.index(os.path.basename(self.local_path)) + 1 :]:
-                current_level = current_level.setdefault(folder, {})
+                path = root.split(os.sep)
+                current_level = structure
+                for folder in path[path.index(os.path.basename(self.local_path)) + 1 :]:
+                    current_level = current_level.setdefault(folder, {})
 
-            for file in files:
-                if self.should_include_file(file):
-                    file_path = os.path.join(root, file)
-                    relative_path = os.path.relpath(file_path, self.local_path)
-                    if os.path.getsize(
-                        file_path
-                    ) <= self.max_file_size and not self.is_binary_file(file_path):
-                        try:
-                            with open(file_path, "r", encoding="utf-8") as f:
-                                content = f.read()
-                            current_level[relative_path] = content
-                        except UnicodeDecodeError:
+                for file in files:
+                    if self.should_include_file(file):
+                        file_path = os.path.join(root, file)
+                        relative_path = os.path.relpath(file_path, self.local_path)
+                        if os.path.getsize(
+                            file_path
+                        ) <= self.max_file_size and not self.is_binary_file(file_path):
+                            try:
+                                with open(file_path, "r", encoding="utf-8") as f:
+                                    content = f.read()
+                                current_level[relative_path] = content
+                            except UnicodeDecodeError:
+                                current_level[relative_path] = (
+                                    "<<< Unable to decode file content >>>"
+                                )
+                        else:
                             current_level[relative_path] = (
-                                "<<< Unable to decode file content >>>"
+                                "<<< File too large or binary >>>"
                             )
-                    else:
-                        current_level[relative_path] = (
-                            "<<< File too large or binary >>>"
-                        )
-        return structure
+            return structure
+        except Exception as e:
+            logger.error(f"Error getting repository structure: {str(e)}")
+            raise
 
     def should_include_file(self, filename):
         # Check if the file should be included based on include/exclude patterns
@@ -106,102 +123,88 @@ class GitHubHandler:
 
     def commit_changes(self, changes):
         repo = Repo(self.local_path)
-        for operation, details in changes.items():
-            if operation == "modify":
-                for file_path, content in details.items():
-                    full_path = os.path.join(self.local_path, file_path)
-                    os.makedirs(os.path.dirname(full_path), exist_ok=True)
-                    with open(full_path, "w", encoding="utf-8") as f:
-                        f.write(content)
-                    repo.index.add([file_path])
-            elif operation == "delete":
-                for file_path in details:
-                    full_path = os.path.join(self.local_path, file_path)
-                    if os.path.exists(full_path):
-                        os.remove(full_path)
-                        repo.index.remove([file_path])
-            elif operation == "rename":
-                for old_path, new_path in details.items():
-                    old_full_path = os.path.join(self.local_path, old_path)
-                    new_full_path = os.path.join(self.local_path, new_path)
-                    os.makedirs(os.path.dirname(new_full_path), exist_ok=True)
-                    os.rename(old_full_path, new_full_path)
-                    repo.index.move([old_path, new_path])
-            elif operation == "mkdir":
-                for dir_path in details:
-                    full_path = os.path.join(self.local_path, dir_path)
-                    os.makedirs(full_path, exist_ok=True)
+        try:
+            for operation, details in changes.items():
+                if operation == "modify":
+                    for file_path, content in details.items():
+                        full_path = os.path.join(self.local_path, file_path)
+                        os.makedirs(os.path.dirname(full_path), exist_ok=True)
+                        with open(full_path, "w", encoding="utf-8") as f:
+                            f.write(content)
+                        repo.index.add([file_path])
+                elif operation == "delete":
+                    for file_path in details:
+                        full_path = os.path.join(self.local_path, file_path)
+                        if os.path.exists(full_path):
+                            os.remove(full_path)
+                            repo.index.remove([file_path])
+                elif operation == "rename":
+                    for old_path, new_path in details.items():
+                        old_full_path = os.path.join(self.local_path, old_path)
+                        new_full_path = os.path.join(self.local_path, new_path)
+                        os.makedirs(os.path.dirname(new_full_path), exist_ok=True)
+                        os.rename(old_full_path, new_full_path)
+                        repo.index.move([old_path, new_path])
+                elif operation == "mkdir":
+                    for dir_path in details:
+                        full_path = os.path.join(self.local_path, dir_path)
+                        os.makedirs(full_path, exist_ok=True)
 
-        if repo.index.diff("HEAD"):
-            commit_message = "AI code review changes"
-            repo.index.commit(commit_message)
-            origin = repo.remote(name="origin")
-            origin.push(self.branch_name)
-            logger.info(f"Committed and pushed changes to branch: {self.branch_name}")
-        else:
-            logger.info("No changes to commit")
-
-    def _modify_file(self, repo, file_path, content):
-        full_path = os.path.join(self.local_path, file_path)
-        os.makedirs(os.path.dirname(full_path), exist_ok=True)
-        with open(full_path, "w") as f:
-            f.write(content)
-        repo.index.add([file_path])
-        action = "Created" if not os.path.exists(full_path) else "Updated"
-        logger.info(f"{action} file: {file_path}")
-
-    def _delete_file(self, repo, file_path):
-        full_path = os.path.join(self.local_path, file_path)
-        if os.path.exists(full_path):
-            os.remove(full_path)
-            repo.index.remove([file_path])
-            logger.info(f"Deleted file: {file_path}")
-
-    def _rename_file(self, repo, old_path, new_path):
-        old_full_path = os.path.join(self.local_path, old_path)
-        new_full_path = os.path.join(self.local_path, new_path)
-        os.makedirs(os.path.dirname(new_full_path), exist_ok=True)
-        shutil.move(old_full_path, new_full_path)
-        repo.index.remove([old_path])
-        repo.index.add([new_path])
-        logger.info(f"Renamed file: {old_path} -> {new_path}")
-
-    def _create_directory(self, dir_path):
-        full_path = os.path.join(self.local_path, dir_path)
-        os.makedirs(full_path, exist_ok=True)
-        logger.info(f"Created directory: {dir_path}")
+            if repo.index.diff("HEAD"):
+                commit_message = "AI code review changes"
+                repo.index.commit(commit_message)
+                origin = repo.remote(name="origin")
+                origin.push(self.branch_name)
+                logger.info(f"Committed and pushed changes to branch: {self.branch_name}")
+            else:
+                logger.info("No changes to commit")
+        except Exception as e:
+            logger.error(f"Error committing changes: {str(e)}")
+            raise
 
     def create_pull_request(self, title, body):
-        pr = self.repo.create_pull(
-            title=title, body=body, head=self.branch_name, base=self.repo.default_branch
-        )
-        logger.info(f"Created pull request: {pr.html_url}")
-        return pr.html_url
+        try:
+            pr = self.repo.create_pull(
+                title=title, body=body, head=self.branch_name, base=self.repo.default_branch
+            )
+            logger.info(f"Created pull request: {pr.html_url}")
+            return pr.html_url
+        except Exception as e:
+            logger.error(f"Error creating pull request: {str(e)}")
+            raise
 
     def cleanup(self):
         if self.local_path and os.path.exists(self.local_path):
             try:
                 shutil.rmtree(self.local_path)
                 logger.info(f"Cleaned up temporary directory: {self.local_path}")
-            except:
+            except Exception as e:
                 logger.warning(
-                    f"Error cleaning up temporary directory: {self.local_path}"
+                    f"Error cleaning up temporary directory: {self.local_path}. Error: {str(e)}"
                 )
 
     def update_readme(self, new_content):
-        readme_path = os.path.join(self.local_path, "README.md")
-        with open(readme_path, "w") as f:
-            f.write(new_content)
-        repo = Repo(self.local_path)
-        repo.index.add(["README.md"])
-        repo.index.commit("Update README.md based on AI code review")
-        origin = repo.remote(name="origin")
-        origin.push(self.branch_name)
-        logger.info("Updated README.md based on AI analysis")
+        try:
+            readme_path = os.path.join(self.local_path, "README.md")
+            with open(readme_path, "w") as f:
+                f.write(new_content)
+            repo = Repo(self.local_path)
+            repo.index.add(["README.md"])
+            repo.index.commit("Update README.md based on AI code review")
+            origin = repo.remote(name="origin")
+            origin.push(self.branch_name)
+            logger.info("Updated README.md based on AI analysis")
+        except Exception as e:
+            logger.error(f"Error updating README: {str(e)}")
+            raise
 
     def get_readme_content(self):
-        readme_path = os.path.join(self.local_path, "README.md")
-        if os.path.exists(readme_path):
-            with open(readme_path, "r") as f:
-                return f.read()
-        return ""
+        try:
+            readme_path = os.path.join(self.local_path, "README.md")
+            if os.path.exists(readme_path):
+                with open(readme_path, "r") as f:
+                    return f.read()
+            return ""
+        except Exception as e:
+            logger.error(f"Error reading README content: {str(e)}")
+            return ""
