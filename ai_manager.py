@@ -81,7 +81,7 @@ class AIManager:
         self.platform_queue = deque(self.ai_platforms)
         self.review_settings = config_manager.get_review_settings(depth)
         self.tokens_used = 0
-        self.token_encoder = tiktoken.encoding_for_model("gpt-4")
+        self.token_encoder = tiktoken.get_encoding("cl100k_base")
 
     def _initialize_ai_platforms(self) -> List[AIInterface]:
         ai_platforms = []
@@ -98,11 +98,16 @@ class AIManager:
                 elif provider == "openai":
                     ai_platforms.append(OpenAIGPT(key, model, max_tokens))
                 else:
-                    raise Exception(f"Invalid AI provider: {provider}")
+                    raise ValueError(f"Invalid AI provider: {provider}")
 
         return ai_platforms
 
-    def _call_ai_with_retry(cls, platform, prompt: str, max_tokens: int):
+    @retry(
+        retry=retry_if_exception_type((anthropic.RateLimitError, openai.RateLimitError)),
+        stop=stop_after_attempt(3),
+        wait=wait_fixed(60),
+    )
+    def _call_ai_with_retry(self, platform, prompt: str, max_tokens: int) -> str:
         try:
             return platform.call_ai(prompt, max_tokens)
         except (anthropic.RateLimitError, openai.RateLimitError) as e:
@@ -110,17 +115,15 @@ class AIManager:
             print(
                 f"Rate limit reached for {platform.__class__.__name__}. Waiting time: {wait_time:.2f} seconds."
             )
-            time.sleep(
-                min(wait_time, 60)
-            )  # Wait for the shorter of wait_time or 60 seconds
-            raise  # Re-raise the exception to trigger a retry
+            time.sleep(min(wait_time, 60))
+            raise
         except Exception as e:
             print(f"Error calling AI platform {platform.__class__.__name__}: {str(e)}")
-            raise  # Re-raise the exception to trigger a retry
+            raise
 
     def call_ai(self, prompt: str) -> str:
         if self.tokens_used >= self.review_settings["token_budget"]:
-            raise Exception("Token budget exceeded. Review process halted.")
+            raise ValueError("Token budget exceeded. Review process halted.")
 
         max_tokens = min(
             self.review_settings["max_tokens_per_call"],
@@ -131,14 +134,12 @@ class AIManager:
             current_platform = self.platform_queue[0]
             try:
                 result = self._call_ai_with_retry(current_platform, prompt, max_tokens)
-                self.tokens_used += self._estimate_tokens(
-                    prompt
-                ) + self._estimate_tokens(result)
+                self.tokens_used += self._estimate_tokens(prompt) + self._estimate_tokens(result)
                 return result
             except Exception:
                 self.platform_queue.rotate(-1)  # Move the current platform to the end
 
-        raise Exception("All AI platforms exhausted. Unable to complete the request.")
+        raise RuntimeError("All AI platforms exhausted. Unable to complete the request.")
 
     def _estimate_tokens(self, text: str) -> int:
         return len(self.token_encoder.encode(text))
@@ -180,7 +181,6 @@ class AIManager:
 
         response = self.call_ai(prompt)
 
-        # Parse the response
         summary_match = re.search(
             r"SUMMARY:\n(.*?)\n\nREADME_UPDATES:", response, re.DOTALL
         )
