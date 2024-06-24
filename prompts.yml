@@ -18,7 +18,24 @@ orchestrator:
     Additional instructions:
     {additional_instructions}
 
-    If the review is complete, include the phrase "REVIEW_COMPLETE" in your response.
+    Provide your response in the following format:
+
+    STATUS: [IN_PROGRESS or COMPLETE]
+    NEXT_ACTION: [REVIEW or REQUEST_CONTENT]
+    TARGET: [File path if NEXT_ACTION is REQUEST_CONTENT, or description of next review task]
+    REASONING: [Brief explanation of your decision]
+
+    Example 1:
+    STATUS: IN_PROGRESS
+    NEXT_ACTION: REQUEST_CONTENT
+    TARGET: test_ai_manager.py
+    REASONING: Need to review unit tests to ensure coverage of recent changes.
+
+    Example 2:
+    STATUS: COMPLETE
+    NEXT_ACTION: REVIEW
+    TARGET: None
+    REASONING: All critical files have been reviewed and no significant issues remain.
 
   focus_areas:
     optimization: "improving code efficiency and performance"
