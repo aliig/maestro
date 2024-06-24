@@ -1,3 +1,6 @@
+Since there are no apparent changes to the project structure or functionality, the existing README.md content appears to be up-to-date and comprehensive. However, to ensure the README remains current and helpful, here's the full content with minor enhancements for clarity and maintenance:
+
+```markdown
 # AI-Powered Code Review
 
 AI-Powered Code Review is an automated tool that leverages artificial intelligence to perform comprehensive code reviews on GitHub repositories. It aims to improve code quality, identify potential issues, and suggest improvements across various file types and programming languages.
@@ -20,35 +23,36 @@ AI-Powered Code Review is an automated tool that leverages artificial intelligen
 ## Installation
 
 1. Clone the repository:
-```bash
-git clone https://github.com/yourusername/ai-powered-code-review.git
-cd ai-powered-code-review
-```
+   ```bash
+   git clone https://github.com/yourusername/ai-powered-code-review.git
+   cd ai-powered-code-review
+   ```
+
 2. Create and activate the Conda environment:
-```bash
-conda env create -f environment.yml
-conda activate ai-code-review
-```
+   ```bash
+   conda env create -f environment.yml
+   conda activate ai-code-review
+   ```
 
 ## Configuration
 
 1. Edit `keys.yml` and add your API keys:
-```yaml
-github_token: "your_github_token_here"
-ai_keys:
-    anthropic:
-    - "your_anthropic_api_key_1_here"
-    - "your_anthropic_api_key_2_here"
-    openai:
-    - "your_openai_api_key_1_here"
-    - "your_openai_api_key_2_here"
-```
+   ```yaml
+   github_token: "your_github_token_here"
+   ai_keys:
+       anthropic:
+       - "your_anthropic_api_key_1_here"
+       - "your_anthropic_api_key_2_here"
+       openai:
+       - "your_openai_api_key_1_here"
+       - "your_openai_api_key_2_here"
+   ```
 
-Alternatively, you can set the following environment variables:
+   Alternatively, you can set the following environment variables:
 
-- `GITHUB_TOKEN`
-- `ANTHROPIC_API_KEY` (comma-separated if multiple)
-- `OPENAI_API_KEY` (comma-separated if multiple)
+   - `GITHUB_TOKEN`
+   - `ANTHROPIC_API_KEY` (comma-separated if multiple)
+   - `OPENAI_API_KEY` (comma-separated if multiple)
 
 ## Usage
 
@@ -71,22 +75,37 @@ python main.py https://github.com/username/repo-to-review --review_depth compreh
 ## Customizing Review Scope
 
 Create a `.aireviews` file in the root of the repository you're reviewing to customize which files are included or excluded:
-    ```
-    ### Include all files by default
-    *
+```
+### Include all files by default
+*
 
-    ### Exclude specific directories
-    node_modules/
-    vendor/
+### Exclude specific directories
+node_modules/
+vendor/
 
-    ### Exclude specific file types
-    *.log
-    *.tmp
+### Exclude specific file types
+*.log
+*.tmp
 
-    ### Include a specific file that would otherwise be excluded
-    !important_config.log
-    ```
+### Include a specific file that would otherwise be excluded
+!important_config.log
+```
 
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Maintenance
+
+This project is actively maintained. If you encounter any issues or have suggestions for improvements, please open an issue on the GitHub repository.
+
+## License
+
+[Include license information here]
+
+## Acknowledgments
+
+[Include any acknowledgments or credits here]
+```
+
+Note: The added sections at the end (Maintenance, License, and Acknowledgments) are placeholder suggestions to make the README more comprehensive. You should fill these sections with appropriate content specific to your project.
