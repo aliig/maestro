@@ -147,7 +147,12 @@ class AIManager:
         raise Exception("All AI platforms exhausted. Unable to complete the request.")
 
     def analyze_changes_and_update_readme(
-        self, original_structure, new_structure, original_readme, changes_summary
+        self,
+        original_structure,
+        new_structure,
+        original_readme,
+        changes_summary,
+        prompt_manager,
     ):
         cleaned_changes = {}
         for file, content in new_structure.items():
@@ -156,41 +161,13 @@ class AIManager:
             else:
                 cleaned_changes[file] = f"New file: {file}\n{content}"
 
-        prompt = f"""
-        Compare the original project structure to the new project structure after AI code review:
-
-        Original structure:
-        {json.dumps(original_structure.keys(), indent=2)}
-
-        New structure:
-        {json.dumps(new_structure.keys(), indent=2)}
-
-        Cleaned changes:
-        {json.dumps(cleaned_changes, indent=2)}
-
-        Summary of changes made during the review:
-        {changes_summary}
-
-        Original README content:
-        {original_readme}
-
-        Based on these changes:
-        1. Provide a concise summary of the major changes made to the project.
-        2. Suggest updates to the README.md file to reflect these changes. Consider:
-           - New dependencies or requirements
-           - Changes in project structure
-           - Updates to usage instructions
-           - Any new features or significant modifications
-           - Do NOT include a changelog in the readme file
-
-        Format your response as follows:
-
-        SUMMARY:
-        (Your summary of changes here)
-
-        README_UPDATES:
-        (Your suggested updates to the README here. Provide the full updated README content.)
-        """
+        prompt = prompt_manager.get_readme_update_prompt(
+            original_structure.keys(),
+            new_structure.keys(),
+            cleaned_changes,
+            changes_summary,
+            original_readme,
+        )
 
         response = self.call_ai(prompt)
 

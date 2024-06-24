@@ -55,3 +55,20 @@ class PromptManager:
         return base_prompt.format(
             task=task, repo_structure=json.dumps(repo_structure, indent=2)
         )
+
+    def get_readme_update_prompt(
+        self,
+        original_structure,
+        new_structure,
+        cleaned_changes,
+        changes_summary,
+        original_readme,
+    ):
+        base_prompt = self.prompts["readme_update"]["base"]
+        return base_prompt.format(
+            original_structure=json.dumps(original_structure, indent=2),
+            new_structure=json.dumps(new_structure, indent=2),
+            cleaned_changes=json.dumps(cleaned_changes, indent=2),
+            changes_summary=changes_summary,
+            original_readme=original_readme,
+        )

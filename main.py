@@ -19,6 +19,7 @@ from utils import (
 
 console = Console()
 
+
 def setup_review_environment():
     config_manager = ConfigManager("config.yml")
     config_manager.validate_config()
@@ -59,6 +60,7 @@ def setup_review_environment():
         previous_results,
     )
 
+
 def parse_orchestrator_response(response):
     pattern = r"STATUS: (.+)\nNEXT_ACTION: (.+)\nTARGET: (.+)\nREASONING: (.+)"
     match = re.search(pattern, response, re.DOTALL)
@@ -70,6 +72,7 @@ def parse_orchestrator_response(response):
             "reasoning": match.group(4).strip(),
         }
     return None
+
 
 def perform_code_review(
     github_handler: GitHubHandler,
@@ -157,6 +160,7 @@ def perform_code_review(
 
     return changes_summary, [original_structure, original_readme]
 
+
 def main():
     logger.info("Starting AI-Powered Code Review")
 
@@ -187,7 +191,11 @@ def main():
         changes_summary_text = "\n".join(changes_summary)
         pr_description, new_readme_content = (
             ai_manager.analyze_changes_and_update_readme(
-                original_data[0], new_structure, original_data[1], changes_summary_text
+                original_data[0],
+                new_structure,
+                original_data[1],
+                changes_summary_text,
+                prompt_manager,
             )
         )
 
@@ -206,6 +214,7 @@ def main():
         logger.info("Temporary files cleaned up. Review process finished.")
         if os.path.exists("review_checkpoint.pkl"):
             os.remove("review_checkpoint.pkl")
+
 
 if __name__ == "__main__":
     main()

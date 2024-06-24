@@ -74,3 +74,38 @@ sub_agent:
     2. Do not use markdown formatting or code block syntax (```).
     3. Do not include comments about unchanged sections or use ellipsis (...).
     4. Ensure all code is properly indented and formatted as it would appear in a Python file.
+
+readme_update:
+  base: |
+    Compare the original project structure to the new project structure after AI code review:
+
+    Original structure:
+    {original_structure}
+
+    New structure:
+    {new_structure}
+
+    Cleaned changes:
+    {cleaned_changes}
+
+    Summary of changes made during the review:
+    {changes_summary}
+
+    Original README content:
+    {original_readme}
+
+    Based on these changes:
+    1. Provide a concise summary of the major changes made to the project.
+    2. Suggest updates to the README.md file to reflect these changes. Consider:
+       - New dependencies or requirements
+       - Changes in project structure
+       - Updates to usage instructions
+       - Any new features or significant modifications
+
+    Format your response as follows:
+
+    SUMMARY:
+    (Your summary of changes here)
+
+    README_UPDATES:
+    (Your suggested updates to the README here. Provide the full updated README content.)
