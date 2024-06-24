@@ -1,6 +1,7 @@
 from typing import Any, Dict, List
 import yaml
 import os
+from logger import logger
 
 class ConfigValidationError(Exception):
     pass
@@ -16,36 +17,48 @@ class ConfigManager:
             with open(self.config_file, "r") as f:
                 return yaml.safe_load(f)
         except FileNotFoundError:
+            logger.error(f"Config file not found: {self.config_file}")
             raise ConfigValidationError(f"Config file not found: {self.config_file}")
         except yaml.YAMLError as e:
+            logger.error(f"Error parsing YAML in config file: {str(e)}")
             raise ConfigValidationError(f"Error parsing YAML in config file: {str(e)}")
+        except Exception as e:
+            logger.error(f"Unexpected error loading config file: {str(e)}")
+            raise ConfigValidationError(f"Unexpected error loading config file: {str(e)}")
 
     def validate_config(self):
-        required_keys = ["github_token", "ai_platforms"]
-        for key in required_keys:
-            if key not in self.config:
-                raise ConfigValidationError(f"Missing required key in config: {key}")
+        try:
+            required_keys = ["github_token", "ai_platforms"]
+            for key in required_keys:
+                if key not in self.config:
+                    raise ConfigValidationError(f"Missing required key in config: {key}")
 
-        if not isinstance(self.config["ai_platforms"], list):
-            raise ConfigValidationError("'ai_platforms' must be a list")
+            if not isinstance(self.config["ai_platforms"], list):
+                raise ConfigValidationError("'ai_platforms' must be a list")
 
-        for platform in self.config["ai_platforms"]:
-            required_platform_keys = ["provider", "model", "keys"]
-            for key in required_platform_keys:
-                if key not in platform:
+            for platform in self.config["ai_platforms"]:
+                required_platform_keys = ["provider", "model", "keys"]
+                for key in required_platform_keys:
+                    if key not in platform:
+                        raise ConfigValidationError(
+                            f"Missing required key in platform config: {key}"
+                        )
+
+                if not isinstance(platform["keys"], list):
                     raise ConfigValidationError(
-                        f"Missing required key in platform config: {key}"
+                        f"'keys' for {platform['provider']} must be a list"
                     )
 
-            if not isinstance(platform["keys"], list):
-                raise ConfigValidationError(
-                    f"'keys' for {platform['provider']} must be a list"
-                )
-
-            if len(platform["keys"]) == 0:
-                raise ConfigValidationError(
-                    f"At least one key must be provided for {platform['provider']}"
-                )
+                if len(platform["keys"]) == 0:
+                    raise ConfigValidationError(
+                        f"At least one key must be provided for {platform['provider']}"
+                    )
+        except ConfigValidationError as e:
+            logger.error(f"Config validation error: {str(e)}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error during config validation: {str(e)}")
+            raise ConfigValidationError(f"Unexpected error during config validation: {str(e)}")
 
     def get_github_token(self) -> str:
         return self.config["github_token"]
@@ -60,30 +73,47 @@ class ConfigManager:
         return depth_settings
 
     def get_value(self, key: str, default: Any = None) -> Any:
-        return self.config.get(key, default)
+        try:
+            return self.config.get(key, default)
+        except Exception as e:
+            logger.error(f"Error getting value for key '{key}': {str(e)}")
+            return default
 
     def update_config(self, key: str, value: Any):
-        self.config[key] = value
-        self.save_config()
+        try:
+            self.config[key] = value
+            self.save_config()
+        except Exception as e:
+            logger.error(f"Error updating config for key '{key}': {str(e)}")
+            raise ConfigValidationError(f"Error updating config for key '{key}': {str(e)}")
 
     def save_config(self):
         try:
             with open(self.config_file, "w") as f:
                 yaml.dump(self.config, f, default_flow_style=False)
         except Exception as e:
+            logger.error(f"Error saving config file: {str(e)}")
             raise ConfigValidationError(f"Error saving config file: {str(e)}")
 
     @staticmethod
     def get_env_variable(var_name: str) -> str:
-        value = os.environ.get(var_name)
-        if not value:
-            raise ConfigValidationError(f"Environment variable {var_name} is not set")
-        return value
+        try:
+            value = os.environ.get(var_name)
+            if not value:
+                raise ConfigValidationError(f"Environment variable {var_name} is not set")
+            return value
+        except Exception as e:
+            logger.error(f"Error getting environment variable '{var_name}': {str(e)}")
+            raise ConfigValidationError(f"Error getting environment variable '{var_name}': {str(e)}")
 
     def load_env_variables(self):
-        self.config["github_token"] = self.get_env_variable("GITHUB_TOKEN")
-        for platform in self.config["ai_platforms"]:
-            if platform["provider"] == "anthropic":
-                platform["keys"] = self.get_env_variable("ANTHROPIC_API_KEY").split(",")
-            elif platform["provider"] == "openai":
-                platform["keys"] = self.get_env_variable("OPENAI_API_KEY").split(",")
+        try:
+            self.config["github_token"] = self.get_env_variable("GITHUB_TOKEN")
+            for platform in self.config["ai_platforms"]:
+                if platform["provider"] == "anthropic":
+                    platform["keys"] = self.get_env_variable("ANTHROPIC_API_KEY").split(",")
+                elif platform["provider"] == "openai":
+                    platform["keys"] = self.get_env_variable("OPENAI_API_KEY").split(",")
+        except Exception as e:
+            logger.error(f"Error loading environment variables: {str(e)}")
+            raise ConfigValidationError(f"Error loading environment variables: {str(e)}")
