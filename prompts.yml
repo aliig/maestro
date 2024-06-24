@@ -13,6 +13,9 @@ orchestrator:
     Previous review results:
     {previous_results}
 
+    Additional instructions:
+    {additional_instructions}
+
     If the review is complete, include the phrase "REVIEW_COMPLETE" in your response.
 
   focus_areas:
