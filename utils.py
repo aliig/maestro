@@ -1,5 +1,3 @@
-# utils.py
-
 import difflib
 import os
 import pickle
@@ -11,17 +9,12 @@ from rich.prompt import Confirm, FloatPrompt, Prompt
 
 console = Console()
 
-
-def get_user_preferences() -> (
-    Tuple[Dict[str, bool], str, str, float, List[str], List[str], Dict, List[str]]
-):
+def get_user_preferences() -> Tuple[Dict[str, bool], str, str, float, List[str], List[str], Dict, List[str]]:
     console.print("\n[bold cyan]AI-Powered Code Review[/bold cyan]")
 
     checkpoint_file = "review_checkpoint.pkl"
     if os.path.exists(checkpoint_file):
-        resume = Confirm.ask(
-            "A previous review checkpoint was found. Do you want to resume?"
-        )
+        resume = Confirm.ask("A previous review checkpoint was found. Do you want to resume?")
         if resume:
             return load_checkpoint(checkpoint_file)
 
@@ -36,9 +29,7 @@ def get_user_preferences() -> (
     }
 
     for area, description in areas.items():
-        preferences[area] = Confirm.ask(
-            f"Include [bold]{area}[/bold] ({description})?", default=True
-        )
+        preferences[area] = Confirm.ask(f"Include [bold]{area}[/bold] ({description})?", default=True)
 
     review_depth = Prompt.ask(
         "Enter review depth",
@@ -48,9 +39,7 @@ def get_user_preferences() -> (
 
     repo_url = Prompt.ask("Enter the GitHub repository URL")
 
-    max_file_size_mb = FloatPrompt.ask(
-        "Enter maximum file size to review in megabytes", default=1.0
-    )
+    max_file_size_mb = FloatPrompt.ask("Enter maximum file size to review in megabytes", default=1.0)
 
     include_patterns = Prompt.ask(
         "Enter file patterns to include (comma-separated)",
@@ -63,12 +52,8 @@ def get_user_preferences() -> (
     ).split(",")
 
     console.print("\n[bold cyan]Additional Review Instructions[/bold cyan]")
-    console.print(
-        "You can provide additional instructions or context for the AI reviewer."
-    )
-    additional_instructions = Prompt.ask(
-        "Enter additional instructions (press Enter if none)"
-    )
+    console.print("You can provide additional instructions or context for the AI reviewer.")
+    additional_instructions = Prompt.ask("Enter additional instructions (press Enter if none)")
     preferences["additional_instructions"] = additional_instructions
 
     return (
@@ -82,15 +67,11 @@ def get_user_preferences() -> (
         [],  # previous_results
     )
 
-
-def load_checkpoint(
-    checkpoint_file: str,
-) -> Tuple[Dict[str, bool], str, str, Dict, List[str], Dict]:
+def load_checkpoint(checkpoint_file: str) -> Tuple[Dict[str, bool], str, str, Dict, List[str], Dict]:
     with open(checkpoint_file, "rb") as f:
         data = pickle.load(f)
     console.print(f"Checkpoint loaded from {checkpoint_file}")
     return data
-
 
 def save_checkpoint(
     checkpoint_file: str,
@@ -113,7 +94,6 @@ def save_checkpoint(
         pickle.dump(data, f)
     console.print(f"Checkpoint saved to {checkpoint_file}")
 
-
 def load_aireviews(repo_path: str) -> Tuple[List[str], List[str]]:
     aireviews_path = os.path.join(repo_path, ".aireviews")
     include_patterns = []
@@ -128,7 +108,6 @@ def load_aireviews(repo_path: str) -> Tuple[List[str], List[str]]:
                     else:
                         exclude_patterns.append(line)
     return include_patterns or ["*"], exclude_patterns
-
 
 def parse_sub_agent_result(result):
     changes = {"modify": {}, "delete": [], "rename": {}, "mkdir": []}
@@ -164,19 +143,11 @@ def parse_sub_agent_result(result):
 
     return {k: v for k, v in changes.items() if v}
 
-
 def preprocess_ai_response(content: str) -> str:
-    # Normalize line endings to LF
     content = content.replace("\r\n", "\n")
-
-    # Remove trailing whitespace from each line
     content = "\n".join(line.rstrip() for line in content.splitlines())
-
-    # Ensure the file ends with a single newline
     content = content.rstrip() + "\n"
-
     return content
-
 
 def clean_diff(old_content: str, new_content: str) -> str:
     old_lines = old_content.splitlines()
@@ -193,3 +164,36 @@ def clean_diff(old_content: str, new_content: str) -> str:
             cleaned_diff.append(line)
 
     return "\n".join(cleaned_diff)
+
+def is_binary_file(file_path: str) -> bool:
+    try:
+        with open(file_path, 'tr') as check_file:
+            check_file.read()
+            return False
+    except:
+        return True
+
+def get_file_content(file_path: str) -> str:
+    if is_binary_file(file_path):
+        return "<<< Binary file >>>"
+    try:
+        with open(file_path, 'r', encoding='utf-8') as f:
+            return f.read()
+    except UnicodeDecodeError:
+        return "<<< Unable to decode file content >>>"
+
+def get_file_extension(file_path: str) -> str:
+    return os.path.splitext(file_path)[1].lower()
+
+def should_ignore_file(file_path: str, ignore_patterns: List[str]) -> bool:
+    return any(re.match(pattern, file_path) for pattern in ignore_patterns)
+
+def calculate_file_hash(file_path: str) -> str:
+    import hashlib
+    with open(file_path, "rb") as f:
+        file_hash = hashlib.md5()
+        chunk = f.read(8192)
+        while chunk:
+            file_hash.update(chunk)
+            chunk = f.read(8192)
+    return file_hash.hexdigest()
