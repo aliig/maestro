@@ -97,15 +97,28 @@ def perform_code_review(
             sub_agent_prompt = prompt_manager.get_sub_agent_prompt(
                 orchestrator_result, repo_structure
             )
+            logger.info(
+                f"Sub-agent prompt: {sub_agent_prompt[:100]}..."
+            )  # Log first 100 chars
             sub_agent_result = ai_manager.call_ai(sub_agent_prompt)
+            logger.info(
+                f"Sub-agent result: {sub_agent_result[:100]}..."
+            )  # Log first 100 chars
 
             changes = parse_sub_agent_result(sub_agent_result)
-            github_handler.commit_changes(changes)
+            logger.info(f"Parsed changes: {changes}")
 
-            changes_summary.append(
-                f"- Iteration {len(previous_results) + 1}: {sum(len(details) for details in changes.values())} operation(s) performed"
-            )
-            previous_results.append(sub_agent_result)
+            if changes:
+                github_handler.commit_changes(changes)
+                changes_summary.append(
+                    f"- Iteration {len(previous_results) + 1}: {sum(len(details) for details in changes.values())} operation(s) performed"
+                )
+                previous_results.append(sub_agent_result)
+
+                # Update repo_structure with the latest changes
+                repo_structure = github_handler.get_repo_structure()
+            else:
+                logger.info("No changes proposed in this iteration.")
 
             save_checkpoint("review_checkpoint.pkl", repo_structure, previous_results)
             progress.update(review_task, advance=10)

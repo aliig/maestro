@@ -67,7 +67,7 @@ def load_aireviews(repo_path: str) -> Tuple[List[str], List[str]]:
     return include_patterns or ["*"], exclude_patterns
 
 
-def parse_sub_agent_result(result: str) -> Dict[str, Dict[str, str]]:
+def parse_sub_agent_result(result):
     changes = {"modify": {}, "delete": [], "rename": {}, "mkdir": []}
     current_file = None
     current_content = []
@@ -93,4 +93,5 @@ def parse_sub_agent_result(result: str) -> Dict[str, Dict[str, str]]:
     if current_file:
         changes["modify"][current_file] = "\n".join(current_content)
 
-    return changes
+    # Remove empty change types
+    return {k: v for k, v in changes.items() if v}
