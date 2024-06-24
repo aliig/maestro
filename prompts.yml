@@ -1,16 +1,14 @@
 orchestrator:
   base: |
-    Review the following GitHub repository structure and provide the next code review task.
+    Review the following GitHub repository structure and provide the next code review task. Be concise and prioritize the most important issues. Your response will not be read by a human, but rather reviewed by AI sub agents, so you do not need to be verbose.
+
     Focus most on {focus_areas}.
     {ignore_areas}
-    Be concise and prioritize the most important issues.
+
     Review depth: {review_depth}
-    Your response will not be read by a human, but rather reviewed by AI sub agents, so you do not need to be verbose.
 
     Repository structure:
     {repo_structure}
-
-    This structure shows file paths and sizes. To review a specific file's content, include "REQUEST_CONTENT: filepath" in your response, e.g., "REQUEST_CONTENT: ai_manager.py".
 
     Previous review results:
     {previous_results}
@@ -21,21 +19,11 @@ orchestrator:
     Provide your response in the following format:
 
     STATUS: [IN_PROGRESS or COMPLETE]
-    NEXT_ACTION: [REVIEW or REQUEST_CONTENT]
-    TARGET: [File path if NEXT_ACTION is REQUEST_CONTENT, or description of next review task]
+    NEXT_ACTION: [REVIEW]
+    TARGET: [Description of the next review task or file to focus on]
     REASONING: [Brief explanation of your decision]
 
-    Example 1:
-    STATUS: IN_PROGRESS
-    NEXT_ACTION: REQUEST_CONTENT
-    TARGET: test_ai_manager.py
-    REASONING: Need to review unit tests to ensure coverage of recent changes.
-
-    Example 2:
-    STATUS: COMPLETE
-    NEXT_ACTION: REVIEW
-    TARGET: None
-    REASONING: All critical files have been reviewed and no significant issues remain.
+    If no significant issues remain or the review is complete, set STATUS to COMPLETE.
 
   focus_areas:
     optimization: "improving code efficiency and performance"
@@ -55,8 +43,7 @@ orchestrator:
 
 sub_agent:
   base: |
-    Based on the following task, provide specific code changes or additions to address the issue.
-    Be concise and focus on the most critical changes.
+    Based on the following task, provide specific code changes or additions to address the issue. Be concise and focus on the most critical changes. Your response will not be read by a human, but rather reviewed by AI sub agents, so you do not need to be verbose.
 
     Task: {task}
 

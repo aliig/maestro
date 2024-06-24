@@ -41,18 +41,17 @@ class PromptManager:
 
         depth_description = self.prompts["orchestrator"]["review_depths"][review_depth]
 
-        # Format the repo_structure
-        formatted_structure = json.dumps(repo_structure, indent=2)
-
         return base_prompt.format(
             focus_areas=focus_areas_text,
             ignore_areas=ignore_areas_text,
             review_depth=depth_description,
-            repo_structure=formatted_structure,
+            repo_structure=json.dumps(repo_structure, indent=2),
             previous_results=previous_results,
             additional_instructions=additional_instructions,
         )
 
     def get_sub_agent_prompt(self, task, repo_structure):
         base_prompt = self.prompts["sub_agent"]["base"]
-        return base_prompt.format(task=task, repo_structure=repo_structure)
+        return base_prompt.format(
+            task=task, repo_structure=json.dumps(repo_structure, indent=2)
+        )
