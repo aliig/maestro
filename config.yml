@@ -12,20 +12,4 @@ ai_platforms:
     keys:
     - "place api key(s) here"
 
-review_settings:
-  depth:
-    minimum:
-      max_files_per_review: 5
-      max_review_iterations: 3
-      max_tokens_per_call: 1000
-    balanced:
-      max_files_per_review: 10
-      max_review_iterations: 5
-      max_tokens_per_call: 2000
-    comprehensive:
-      max_files_per_review: 20
-      max_review_iterations: 10
-      max_tokens_per_call: 4000
-  token_budget: 100000  # Total token budget for the entire review process
-
 max_retries: 3
