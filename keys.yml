@@ -1,9 +1,0 @@
-github_token: "your_github_token_here"
-
-ai_keys:
-  anthropic:
-    - "your_anthropic_api_key_1_here"
-    - "your_anthropic_api_key_2_here"
-  openai:
-    - "your_openai_api_key_1_here"
-    - "your_openai_api_key_2_here"
