@@ -91,12 +91,17 @@ def perform_code_review(
     original_structure = repo_structure.copy()
     original_readme = github_handler.get_readme_content()
     changes_summary = []
+    additional_instructions = change_types.get("additional_instructions", "")
 
     logger.info("Performing code review...")
 
     while True:
         orchestrator_prompt = prompt_manager.get_orchestrator_prompt(
-            repo_structure, review_depth, change_types, "\n".join(previous_results)
+            repo_structure,
+            review_depth,
+            change_types,
+            "\n".join(previous_results),
+            additional_instructions,
         )
         orchestrator_result = ai_manager.call_ai(orchestrator_prompt)
         logger.info(f"Orchestrator prompt: {orchestrator_prompt}")

@@ -5,12 +5,12 @@ import pickle
 from typing import Dict, List, Tuple
 
 from rich.console import Console
-from rich.prompt import Confirm
+from rich.prompt import Confirm, Prompt
 
 console = Console()
 
 
-def get_user_preferences() -> Dict[str, bool]:
+def get_user_preferences():
     console.print("\n[bold cyan]Code Review Preferences[/bold cyan]")
     console.print(
         "Please specify which areas you'd like the AI to focus on during the review."
@@ -30,6 +30,20 @@ def get_user_preferences() -> Dict[str, bool]:
         preferences[area] = Confirm.ask(
             f"Include [bold]{area}[/bold] ({description})?", default=True
         )
+
+    # Additional prompt information
+    console.print("\n[bold cyan]Additional Review Instructions[/bold cyan]")
+    console.print(
+        "You can provide additional instructions or context for the AI reviewer."
+    )
+    console.print(
+        "This could include specific areas of concern, project-specific guidelines, or any other relevant information."
+    )
+
+    additional_instructions = Prompt.ask(
+        "Enter additional instructions (press Enter if none)"
+    )
+    preferences["additional_instructions"] = additional_instructions
 
     return preferences
 
