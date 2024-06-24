@@ -19,7 +19,6 @@ from utils import (
 
 console = Console()
 
-
 def setup_review_environment():
     config_manager = ConfigManager("config.yml")
     config_manager.validate_config()
@@ -48,7 +47,7 @@ def setup_review_environment():
 
     if repo_structure is None:
         logger.info("Analyzing repository structure...")
-        repo_structure = github_handler.get_repo_structure()
+        repo_structure = dict(github_handler.get_repo_structure())
 
     return (
         github_handler,
@@ -59,7 +58,6 @@ def setup_review_environment():
         repo_structure,
         previous_results,
     )
-
 
 def parse_orchestrator_response(response):
     pattern = r"STATUS: (.+)\nNEXT_ACTION: (.+)\nTARGET: (.+)\nREASONING: (.+)"
@@ -72,7 +70,6 @@ def parse_orchestrator_response(response):
             "reasoning": match.group(4).strip(),
         }
     return None
-
 
 def perform_code_review(
     github_handler: GitHubHandler,
@@ -98,7 +95,6 @@ def perform_code_review(
         review_task = progress.add_task("[cyan]Reviewing code...", total=None)
 
         while True:
-
             orchestrator_prompt = prompt_manager.get_orchestrator_prompt(
                 repo_structure,
                 review_depth,
@@ -168,7 +164,7 @@ def perform_code_review(
                                 file_state[path] = "new_directory"
 
                     # Update repo_structure with the latest changes
-                    repo_structure = github_handler.get_repo_structure()
+                    repo_structure = dict(github_handler.get_repo_structure())
 
                     # Add any new files to file_state
                     for path in repo_structure:
@@ -190,7 +186,6 @@ def perform_code_review(
             progress.update(review_task, advance=1)
 
     return changes_summary, [original_structure, original_readme]
-
 
 def main():
     logger.info("Starting AI-Powered Code Review")
@@ -218,7 +213,7 @@ def main():
 
         logger.info("Code review complete!")
 
-        new_structure = github_handler.get_repo_structure()
+        new_structure = dict(github_handler.get_repo_structure())
         changes_summary_text = "\n".join(changes_summary)
         pr_description, new_readme_content = (
             ai_manager.analyze_changes_and_update_readme(
@@ -245,7 +240,6 @@ def main():
         logger.info("Temporary files cleaned up. Review process finished.")
         if os.path.exists("review_checkpoint.pkl"):
             os.remove("review_checkpoint.pkl")
-
 
 if __name__ == "__main__":
     main()
