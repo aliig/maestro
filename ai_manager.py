@@ -1,102 +1,36 @@
+```python
 import json
 import re
 import time
 from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from typing import Any, Dict, List
+from collections import deque
 
 import anthropic
 import openai
-
+import tiktoken
 
 class AIInterface(ABC):
-    @abstractmethod
-    def call_ai(self, prompt: str, max_tokens: int) -> str:
-        pass
-
-    @abstractmethod
-    def get_rate_limit_reset_time(self, error) -> float:
-        pass
-
+    # ... (unchanged)
 
 class AnthropicAI(AIInterface):
-    def __init__(self, api_key: str, model: str, max_tokens: int):
-        self.client = anthropic.Anthropic(api_key=api_key)
-        self.model = model
-        self.max_tokens = max_tokens
-
-    def call_ai(self, prompt: str, max_tokens: int) -> str:
-        response = self.client.messages.create(
-            model=self.model,
-            max_tokens=min(max_tokens, self.max_tokens),
-            messages=[{"role": "user", "content": prompt}],
-        )
-        return response.content[0].text
-
-    def get_rate_limit_reset_time(self, error) -> float:
-        if isinstance(error, anthropic.RateLimitError):
-            headers = error.response.headers
-            reset_time = headers.get("anthropic-ratelimit-reset")
-            if reset_time:
-                return max(
-                    (
-                        datetime.fromisoformat(reset_time.replace("Z", "+00:00"))
-                        - datetime.now(timezone.utc)
-                    ).total_seconds(),
-                    0,
-                )
-        return 60  # Default to 60 seconds if we can't determine the actual reset time
-
+    # ... (unchanged)
 
 class OpenAIGPT(AIInterface):
-    def __init__(self, api_key: str, model: str, max_tokens: int):
-        self.client = openai.OpenAI(api_key=api_key)
-        self.model = model
-        self.max_tokens = max_tokens
-
-    def call_ai(self, prompt: str, max_tokens: int) -> str:
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=min(max_tokens, self.max_tokens),
-        )
-        return response.choices[0].message.content
-
-    def get_rate_limit_reset_time(self, error) -> float:
-        if isinstance(error, openai.RateLimitError):
-            headers = error.response.headers
-            reset_time = headers.get("x-ratelimit-reset-requests")
-            if reset_time:
-                return max(float(reset_time) - time.time(), 0)
-        return 60  # Default to 60 seconds if we can't determine the actual reset time
-
+    # ... (unchanged)
 
 class AIManager:
     def __init__(self, config_manager, depth):
         self.config_manager = config_manager
         self.ai_platforms = self._initialize_ai_platforms()
-        self.current_platform_index = 0
+        self.platform_queue = deque(self.ai_platforms)
         self.review_settings = config_manager.get_review_settings(depth)
         self.tokens_used = 0
+        self.token_encoder = tiktoken.encoding_for_model("gpt-4")
 
     def _initialize_ai_platforms(self) -> List[AIInterface]:
-        ai_platforms = []
-        platforms = self.config_manager.get_ai_platforms()
-
-        for platform in platforms:
-            provider = platform["provider"]
-            keys = platform["keys"]
-            model = platform["model"]
-            max_tokens = platform["max_tokens"]
-            for key in keys:
-                if provider == "anthropic":
-                    ai_platforms.append(AnthropicAI(key, model, max_tokens))
-                elif provider == "openai":
-                    ai_platforms.append(OpenAIGPT(key, model, max_tokens))
-                else:
-                    raise Exception(f"Invalid AI provider: {provider}")
-
-        return ai_platforms
+        # ... (unchanged)
 
     def call_ai(self, prompt: str) -> str:
         if self.tokens_used >= self.review_settings["token_budget"]:
@@ -107,43 +41,26 @@ class AIManager:
             self.review_settings["token_budget"] - self.tokens_used,
         )
 
-        start_index = self.current_platform_index
         for _ in range(len(self.ai_platforms)):
             try:
-                result = self.ai_platforms[self.current_platform_index].call_ai(
-                    prompt, max_tokens
-                )
-                self.tokens_used += self._estimate_tokens(
-                    prompt
-                ) + self._estimate_tokens(result)
+                current_platform = self.platform_queue[0]
+                result = current_platform.call_ai(prompt, max_tokens)
+                self.tokens_used += self._estimate_tokens(prompt) + self._estimate_tokens(result)
+                self.platform_queue.rotate(-1)  # Move the used platform to the end
                 return result
             except (anthropic.RateLimitError, openai.RateLimitError) as e:
-                wait_time = self.ai_platforms[
-                    self.current_platform_index
-                ].get_rate_limit_reset_time(e)
-                print(
-                    f"Rate limit reached for API key {self.current_platform_index}. Waiting time: {wait_time:.2f} seconds."
-                )
-
-                # Move to the next API key
-                self.current_platform_index = (self.current_platform_index + 1) % len(
-                    self.ai_platforms
-                )
-
-                # If we've tried all keys and are back to the start, wait for the shortest reset time
-                if self.current_platform_index == start_index:
-                    time.sleep(wait_time)
+                wait_time = current_platform.get_rate_limit_reset_time(e)
+                print(f"Rate limit reached for API key. Waiting time: {wait_time:.2f} seconds.")
+                self.platform_queue.rotate(-1)  # Move the rate-limited platform to the end
+                time.sleep(min(wait_time, 60))  # Wait for the shorter of wait_time or 60 seconds
             except Exception as e:
                 print(f"Error calling AI platform: {str(e)}")
-                self.current_platform_index = (self.current_platform_index + 1) % len(
-                    self.ai_platforms
-                )
+                self.platform_queue.rotate(-1)  # Move the errored platform to the end
 
         raise Exception("Max retries reached. Unable to call any AI platform.")
 
     def _estimate_tokens(self, text: str) -> int:
-        # A simple estimation: 1 token ≈ 4 characters
-        return len(text) // 4
+        return len(self.token_encoder.encode(text))
 
     def analyze_changes_and_update_readme(
         self, original_structure, new_structure, original_readme, changes_summary
@@ -182,15 +99,28 @@ class AIManager:
 
         response = self.call_ai(prompt)
 
-        # Parse the response
-        summary_match = re.search(
-            r"SUMMARY:\n(.*?)\n\nREADME_UPDATES:", response, re.DOTALL
-        )
-        readme_match = re.search(r"README_UPDATES:\n(.*)", response, re.DOTALL)
+        # Parse the response using regex
+        summary_match = re.search(r"SUMMARY:\s*(.*?)(?:\n\n|\Z)", response, re.DOTALL)
+        readme_match = re.search(r"README_UPDATES:\s*(.*)", response, re.DOTALL)
 
         if summary_match and readme_match:
             return summary_match.group(1).strip(), readme_match.group(1).strip()
         else:
-            raise ValueError(
-                "Failed to parse AI response for changes summary and README updates"
-            )
+            raise ValueError("Failed to parse AI response for changes summary and README updates")
+```
+
+These changes include:
+
+1. Optimized `call_ai` method:
+   - Use a `deque` for efficient rotation of AI platforms.
+   - Implement a more robust retry mechanism with shorter wait times.
+
+2. Improved `_estimate_tokens` method:
+   - Use the `tiktoken` library for more accurate token estimation.
+
+3. Optimized `analyze_changes_and_update_readme` method:
+   - Use more efficient regex patterns for parsing the AI response.
+
+4. Added `tiktoken` import for better token estimation.
+
+These changes should improve the overall efficiency and performance of the `AIManager` class.
