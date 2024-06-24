@@ -28,7 +28,7 @@ class AnthropicAI(AIInterface):
         self.client = anthropic.Anthropic(api_key=api_key)
         self.model = model
 
-    def call_ai(self, prompt: SyntaxError) -> str:
+    def call_ai(self, prompt: str) -> str:
         response = self.client.messages.create(
             model=self.model,
             messages=[{"role": "user", "content": prompt}],
@@ -97,28 +97,26 @@ class AIManager:
 
         return ai_platforms
 
-    def _call_ai_with_retry(
-        cls,
-        platform,
-        prompt: str,
-    ):
+    @retry(
+        retry=retry_if_exception_type((anthropic.RateLimitError, openai.RateLimitError)),
+        stop=stop_after_attempt(3),
+        wait=wait_fixed(60),
+    )
+    def _call_ai_with_retry(self, platform, prompt: str):
         try:
             return platform.call_ai(prompt)
         except (anthropic.RateLimitError, openai.RateLimitError) as e:
             wait_time = platform.get_rate_limit_reset_time(e)
-            print(
+            logger.warning(
                 f"Rate limit reached for {platform.__class__.__name__}. Waiting time: {wait_time:.2f} seconds."
             )
-            time.sleep(
-                min(wait_time, 60)
-            )  # Wait for the shorter of wait_time or 60 seconds
+            time.sleep(min(wait_time, 60))
             raise  # Re-raise the exception to trigger a retry
         except Exception as e:
-            print(f"Error calling AI platform {platform.__class__.__name__}: {str(e)}")
+            logger.error(f"Error calling AI platform {platform.__class__.__name__}: {str(e)}")
             raise  # Re-raise the exception to trigger a retry
 
     def call_ai(self, prompt: str) -> str:
-
         for _ in range(len(self.ai_platforms)):
             current_platform = self.platform_queue[0]
             try:
