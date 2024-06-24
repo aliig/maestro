@@ -61,6 +61,7 @@ class GitHubHandler:
             for file in files:
                 if self.should_include_file(file):
                     file_path = os.path.join(root, file)
+                    relative_path = os.path.relpath(file_path, self.local_path)
                     if os.path.getsize(
                         file_path
                     ) <= self.max_file_size and not self.is_binary_file(file_path):
@@ -70,14 +71,17 @@ class GitHubHandler:
                             result = chardet.detect(raw_data)
                             encoding = result["encoding"] or "utf-8"
                             content = raw_data.decode(encoding)
-                            current_level[file] = content
+                            current_level[relative_path] = (
+                                f"<<< File content ({len(content)} characters) >>>"
+                            )
                         except UnicodeDecodeError:
-                            # If we still can't decode it, skip this file
-                            current_level[file] = (
+                            current_level[relative_path] = (
                                 "<<< Unable to decode file content >>>"
                             )
                     else:
-                        current_level[file] = "<<< File too large or binary >>>"
+                        current_level[relative_path] = (
+                            "<<< File too large or binary >>>"
+                        )
         return structure
 
     def should_include_file(self, filename):

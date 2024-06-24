@@ -1,3 +1,5 @@
+import json
+
 import yaml
 
 
@@ -39,11 +41,14 @@ class PromptManager:
 
         depth_description = self.prompts["orchestrator"]["review_depths"][review_depth]
 
+        # Format the repo_structure
+        formatted_structure = json.dumps(repo_structure, indent=2)
+
         return base_prompt.format(
             focus_areas=focus_areas_text,
             ignore_areas=ignore_areas_text,
             review_depth=depth_description,
-            repo_structure=repo_structure,
+            repo_structure=formatted_structure,
             previous_results=previous_results,
             additional_instructions=additional_instructions,
         )
