@@ -1,4 +1,3 @@
-# Miniconda
 .conda/
-keys.yml
+config.yml
 __pycache__/
