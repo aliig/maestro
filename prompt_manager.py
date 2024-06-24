@@ -16,7 +16,11 @@ class PromptManager:
     ):
         base_prompt = self.prompts["orchestrator"]["base"]
         all_areas = set(self.prompts["orchestrator"]["focus_areas"].keys())
-        focus_areas = [area for area in change_types if change_types[area]]
+        focus_areas = [
+            area
+            for area in change_types
+            if change_types[area] and area != "additional_instructions"
+        ]
         ignore_areas = all_areas - set(focus_areas)
 
         focus_areas_text = ", ".join(
