@@ -18,9 +18,8 @@ class TestAIManager(unittest.TestCase):
             "claude": {
                 "provider": "anthropic",
                 "model": "claude-3",
-                "max_tokens": 4096,
             },
-            "gpt4": {"provider": "openai", "model": "gpt-4", "max_tokens": 8192},
+            "gpt4": {"provider": "openai", "model": "gpt-4"},
         }
         self.ai_manager = AIManager(self.mock_config_manager)
 

@@ -14,7 +14,7 @@ from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fi
 
 class AIInterface(ABC):
     @abstractmethod
-    def call_ai(self, prompt: str, max_tokens: int) -> str:
+    def call_ai(self, prompt: str) -> str:
         pass
 
     @abstractmethod
@@ -23,16 +23,13 @@ class AIInterface(ABC):
 
 
 class AnthropicAI(AIInterface):
-    def __init__(self, api_key: str, model: str, max_tokens: int):
+    def __init__(self, api_key: str, model: str):
         self.client = anthropic.Anthropic(api_key=api_key)
         self.model = model
-        self.max_tokens = max_tokens
 
-    def call_ai(self, prompt: str, max_tokens: int) -> str:
+    def call_ai(self, prompt: SyntaxError) -> str:
         response = self.client.messages.create(
-            model=self.model,
-            max_tokens=min(max_tokens, self.max_tokens),
-            messages=[{"role": "user", "content": prompt}],
+            model=self.model, messages=[{"role": "user", "content": prompt}]
         )
         return response.content[0].text
 
@@ -52,16 +49,13 @@ class AnthropicAI(AIInterface):
 
 
 class OpenAIGPT(AIInterface):
-    def __init__(self, api_key: str, model: str, max_tokens: int):
+    def __init__(self, api_key: str, model: str):
         self.client = openai.OpenAI(api_key=api_key)
         self.model = model
-        self.max_tokens = max_tokens
 
-    def call_ai(self, prompt: str, max_tokens: int) -> str:
+    def call_ai(self, prompt: str) -> str:
         response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=min(max_tokens, self.max_tokens),
+            model=self.model, messages=[{"role": "user", "content": prompt}]
         )
         return response.choices[0].message.content
 
@@ -79,9 +73,6 @@ class AIManager:
         self.config_manager = config_manager
         self.ai_platforms = self._initialize_ai_platforms()
         self.platform_queue = deque(self.ai_platforms)
-        self.review_settings = config_manager.get_review_settings(depth)
-        self.tokens_used = 0
-        self.token_encoder = tiktoken.encoding_for_model("gpt-4")
 
     def _initialize_ai_platforms(self) -> List[AIInterface]:
         ai_platforms = []
@@ -91,20 +82,23 @@ class AIManager:
             provider = platform["provider"]
             keys = platform["keys"]
             model = platform["model"]
-            max_tokens = platform["max_tokens"]
             for key in keys:
                 if provider == "anthropic":
-                    ai_platforms.append(AnthropicAI(key, model, max_tokens))
+                    ai_platforms.append(AnthropicAI(key, model))
                 elif provider == "openai":
-                    ai_platforms.append(OpenAIGPT(key, model, max_tokens))
+                    ai_platforms.append(OpenAIGPT(key, model))
                 else:
                     raise Exception(f"Invalid AI provider: {provider}")
 
         return ai_platforms
 
-    def _call_ai_with_retry(cls, platform, prompt: str, max_tokens: int):
+    def _call_ai_with_retry(
+        cls,
+        platform,
+        prompt: str,
+    ):
         try:
-            return platform.call_ai(prompt, max_tokens)
+            return platform.call_ai(prompt)
         except (anthropic.RateLimitError, openai.RateLimitError) as e:
             wait_time = platform.get_rate_limit_reset_time(e)
             print(
@@ -119,29 +113,16 @@ class AIManager:
             raise  # Re-raise the exception to trigger a retry
 
     def call_ai(self, prompt: str) -> str:
-        if self.tokens_used >= self.review_settings["token_budget"]:
-            raise Exception("Token budget exceeded. Review process halted.")
-
-        max_tokens = min(
-            self.review_settings["max_tokens_per_call"],
-            self.review_settings["token_budget"] - self.tokens_used,
-        )
 
         for _ in range(len(self.ai_platforms)):
             current_platform = self.platform_queue[0]
             try:
-                result = self._call_ai_with_retry(current_platform, prompt, max_tokens)
-                self.tokens_used += self._estimate_tokens(
-                    prompt
-                ) + self._estimate_tokens(result)
+                result = self._call_ai_with_retry(current_platform, prompt)
                 return result
             except Exception:
                 self.platform_queue.rotate(-1)  # Move the current platform to the end
 
         raise Exception("All AI platforms exhausted. Unable to complete the request.")
-
-    def _estimate_tokens(self, text: str) -> int:
-        return len(self.token_encoder.encode(text))
 
     def analyze_changes_and_update_readme(
         self, original_structure, new_structure, original_readme, changes_summary

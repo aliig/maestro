@@ -39,12 +39,10 @@ github_token: "your_github_token_here"
 ai_platforms:
   - provider: "anthropic"
     model: "claude-3-5-sonnet-20240620"
-    max_tokens: 4096
     keys:
     - "your_anthropic_api_key_here"
   - provider: "openai"
     model: "gpt-4"
-    max_tokens: 8192
     keys:
     - "your_openai_api_key_here"
 ```
