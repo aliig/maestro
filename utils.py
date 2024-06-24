@@ -3,6 +3,7 @@ import os
 import pickle
 import re
 from typing import Dict, List, Tuple
+import hashlib
 
 from rich.console import Console
 from rich.prompt import Confirm, FloatPrompt, Prompt
@@ -109,7 +110,7 @@ def load_aireviews(repo_path: str) -> Tuple[List[str], List[str]]:
                         exclude_patterns.append(line)
     return include_patterns or ["*"], exclude_patterns
 
-def parse_sub_agent_result(result):
+def parse_sub_agent_result(result: str) -> Dict[str, Dict[str, str]]:
     changes = {"modify": {}, "delete": [], "rename": {}, "mkdir": []}
     current_file = None
     current_content = []
@@ -119,7 +120,7 @@ def parse_sub_agent_result(result):
         if line.startswith("MODIFY:") or line.startswith("CREATE:"):
             if current_file:
                 changes["modify"][current_file] = "\n".join(current_content)
-            current_file = line.split(":")[1].strip()
+            current_file = line.split(":", 1)[1].strip()
             current_content = []
             in_python_code = False
         elif line.strip() == "<PYTHON_CODE>":
@@ -130,13 +131,13 @@ def parse_sub_agent_result(result):
             current_file = None
             current_content = []
         elif line.startswith("DELETE:"):
-            file_to_delete = line.split("DELETE:")[1].strip()
+            file_to_delete = line.split(":", 1)[1].strip()
             changes["delete"].append(file_to_delete)
         elif line.startswith("RENAME:"):
-            old_path, new_path = line.split("RENAME:")[1].strip().split(" -> ")
+            old_path, new_path = line.split(":", 1)[1].strip().split(" -> ")
             changes["rename"][old_path.strip()] = new_path.strip()
         elif line.startswith("MKDIR:"):
-            dir_to_create = line.split("MKDIR:")[1].strip()
+            dir_to_create = line.split(":", 1)[1].strip()
             changes["mkdir"].append(dir_to_create)
         elif in_python_code:
             current_content.append(line)
@@ -144,26 +145,12 @@ def parse_sub_agent_result(result):
     return {k: v for k, v in changes.items() if v}
 
 def preprocess_ai_response(content: str) -> str:
-    content = content.replace("\r\n", "\n")
-    content = "\n".join(line.rstrip() for line in content.splitlines())
-    content = content.rstrip() + "\n"
-    return content
+    return "\n".join(line.rstrip() for line in content.replace("\r\n", "\n").splitlines()).rstrip() + "\n"
 
 def clean_diff(old_content: str, new_content: str) -> str:
-    old_lines = old_content.splitlines()
-    new_lines = new_content.splitlines()
-
     differ = difflib.Differ()
-    diff = list(differ.compare(old_lines, new_lines))
-
-    cleaned_diff = []
-    for line in diff:
-        if line.startswith("  "):  # Unchanged line
-            continue
-        elif line.startswith("- ") or line.startswith("+ "):
-            cleaned_diff.append(line)
-
-    return "\n".join(cleaned_diff)
+    diff = list(differ.compare(old_content.splitlines(), new_content.splitlines()))
+    return "\n".join(line for line in diff if line.startswith("- ") or line.startswith("+ "))
 
 def is_binary_file(file_path: str) -> bool:
     try:
@@ -189,11 +176,8 @@ def should_ignore_file(file_path: str, ignore_patterns: List[str]) -> bool:
     return any(re.match(pattern, file_path) for pattern in ignore_patterns)
 
 def calculate_file_hash(file_path: str) -> str:
-    import hashlib
+    file_hash = hashlib.md5()
     with open(file_path, "rb") as f:
-        file_hash = hashlib.md5()
-        chunk = f.read(8192)
-        while chunk:
+        for chunk in iter(lambda: f.read(4096), b""):
             file_hash.update(chunk)
-            chunk = f.read(8192)
     return file_hash.hexdigest()
