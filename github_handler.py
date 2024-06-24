@@ -171,7 +171,7 @@ class GitHubHandler:
             if repo.index.diff("HEAD"):
                 commit_message = "AI code review changes"
                 # Use Git's whitespace handling
-                repo.git.commit("-m", commit_message, "--whitespace=fix")
+                repo.git.commit("-m", commit_message)
                 origin = repo.remote(name="origin")
                 origin.push(self.branch_name)
                 logger.info(
