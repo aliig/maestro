@@ -13,7 +13,6 @@ from prompt_manager import PromptManager
 from utils import (
     get_user_preferences,
     load_aireviews,
-    load_checkpoint,
     parse_sub_agent_result,
     save_checkpoint,
 )
@@ -67,7 +66,6 @@ def perform_code_review(
     change_types: Dict[str, bool],
     review_depth: str,
 ) -> Tuple[List[str], List[str]]:
-    repo_structure, previous_results = load_checkpoint("review_checkpoint.pkl")
     if repo_structure is None:
         logger.info("Analyzing repository structure...")
         repo_structure = github_handler.get_repo_structure()
