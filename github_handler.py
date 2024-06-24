@@ -56,7 +56,6 @@ class GitHubHandler:
     def get_repo_structure(self):
         structure = {}
         for root, dirs, files in os.walk(self.local_path):
-            # Skip .git directory
             if ".git" in dirs:
                 dirs.remove(".git")
 
@@ -73,14 +72,9 @@ class GitHubHandler:
                         file_path
                     ) <= self.max_file_size and not self.is_binary_file(file_path):
                         try:
-                            with open(file_path, "rb") as f:
-                                raw_data = f.read()
-                            result = chardet.detect(raw_data)
-                            encoding = result["encoding"] or "utf-8"
-                            content = raw_data.decode(encoding)
-                            current_level[relative_path] = (
-                                f"<<< File content ({len(content)} characters) >>>"
-                            )
+                            with open(file_path, "r", encoding="utf-8") as f:
+                                content = f.read()
+                            current_level[relative_path] = content
                         except UnicodeDecodeError:
                             current_level[relative_path] = (
                                 "<<< Unable to decode file content >>>"
