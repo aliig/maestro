@@ -19,18 +19,29 @@ from utils import (
 
 console = Console()
 
+
 def setup_review_environment():
     config_manager = ConfigManager("config.yml")
-    
+
     repo_url = input("Enter the GitHub repository URL: ")
     github_handler = GitHubHandler(repo_url, config_manager.get_github_token())
 
-    review_depth = input("Enter review depth (minimum, balanced, or comprehensive) [balanced]: ").lower() or "balanced"
+    review_depth = (
+        input(
+            "Enter review depth (minimum, balanced, or comprehensive) [balanced]: "
+        ).lower()
+        or "balanced"
+    )
     if review_depth not in ["minimum", "balanced", "comprehensive"]:
         review_depth = "balanced"
 
-    max_file_size = input("Enter maximum file size to review in bytes [1048576]: ")
-    max_file_size = int(max_file_size) if max_file_size.isdigit() else 1048576
+    max_file_size_mb = input("Enter maximum file size to review in megabytes [1]: ")
+    max_file_size_mb = (
+        float(max_file_size_mb)
+        if max_file_size_mb.replace(".", "", 1).isdigit()
+        else 1.0
+    )
+    max_file_size = int(max_file_size_mb * 1048576)  # Convert megabytes to bytes
 
     # Set default patterns if not provided
     include_patterns = [
@@ -60,6 +71,7 @@ def setup_review_environment():
     change_types = get_user_preferences()
 
     return github_handler, prompt_manager, ai_manager, change_types, review_depth
+
 
 def perform_code_review(
     github_handler: GitHubHandler,
@@ -126,10 +138,13 @@ def perform_code_review(
 
     return changes_summary, [original_structure, original_readme]
 
+
 def main():
     logger.info("Starting AI-Powered Code Review")
 
-    github_handler, prompt_manager, ai_manager, change_types, review_depth = setup_review_environment()
+    github_handler, prompt_manager, ai_manager, change_types, review_depth = (
+        setup_review_environment()
+    )
 
     try:
         changes_summary, original_data = perform_code_review(
@@ -161,6 +176,7 @@ def main():
         logger.info("Temporary files cleaned up. Review process finished.")
         if os.path.exists("review_checkpoint.pkl"):
             os.remove("review_checkpoint.pkl")
+
 
 if __name__ == "__main__":
     main()
