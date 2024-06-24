@@ -56,10 +56,15 @@ class PromptManager:
             file_state=file_state_text,
         )
 
-    def get_sub_agent_prompt(self, task, repo_structure):
+    def get_sub_agent_prompt(self, task, repo_structure, file_state):
         base_prompt = self.prompts["sub_agent"]["base"]
+        file_state_text = "\n".join(
+            [f"{path}: {state}" for path, state in file_state.items()]
+        )
         return base_prompt.format(
-            task=task, repo_structure=json.dumps(repo_structure, indent=2)
+            task=task,
+            repo_structure=json.dumps(repo_structure, indent=2),
+            file_state=file_state_text,
         )
 
     def get_readme_update_prompt(

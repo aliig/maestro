@@ -129,7 +129,7 @@ def perform_code_review(
                 sub_agent_prompt = prompt_manager.get_sub_agent_prompt(
                     parsed_result["reasoning"],
                     repo_structure,
-                    file_state,  # Pass file state here too
+                    file_state,
                 )
 
                 logger.debug(
