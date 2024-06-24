@@ -162,8 +162,13 @@ class GitHubHandler:
 
     def cleanup(self):
         if self.local_path and os.path.exists(self.local_path):
-            shutil.rmtree(self.local_path)
-            logger.info(f"Cleaned up temporary directory: {self.local_path}")
+            try:
+                shutil.rmtree(self.local_path)
+                logger.info(f"Cleaned up temporary directory: {self.local_path}")
+            except:
+                logger.warning(
+                    f"Error cleaning up temporary directory: {self.local_path}"
+                )
 
     def update_readme(self, new_content):
         readme_path = os.path.join(self.local_path, "README.md")
