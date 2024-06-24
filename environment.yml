@@ -14,4 +14,3 @@ dependencies:
     - openai
     - chardet
     - tenacity
-    - tiktoken

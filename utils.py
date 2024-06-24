@@ -19,7 +19,7 @@ console = Console()
 
 
 def get_user_preferences() -> (
-    Tuple[Dict[str, bool], str, str, float, List[str], List[str]]
+    Tuple[Dict[str, bool], str, str, float, List[str], List[str], Dict, List[str]]
 ):
     console.print("\n[bold cyan]AI-Powered Code Review[/bold cyan]")
 
@@ -46,13 +46,14 @@ def get_user_preferences() -> (
             f"Include [bold]{area}[/bold] ({description})?", default=True
         )
 
-    console.print("\n[bold cyan]Review Settings[/bold cyan]")
-    repo_url = Prompt.ask("Enter the GitHub repository URL")
     review_depth = Prompt.ask(
         "Enter review depth",
         choices=["minimum", "balanced", "comprehensive"],
         default="balanced",
     )
+
+    repo_url = Prompt.ask("Enter the GitHub repository URL")
+
     max_file_size_mb = FloatPrompt.ask(
         "Enter maximum file size to review in megabytes", default=1.0
     )
@@ -61,6 +62,7 @@ def get_user_preferences() -> (
         "Enter file patterns to include (comma-separated)",
         default="*.py,*.js,*.html,*.css,*.md,*.yml,*.yaml,*.json",
     ).split(",")
+
     exclude_patterns = Prompt.ask(
         "Enter file patterns to exclude (comma-separated)",
         default=".git/*,node_modules/*,venv/*,*.pyc",
@@ -82,12 +84,14 @@ def get_user_preferences() -> (
         max_file_size_mb,
         include_patterns,
         exclude_patterns,
+        None,
+        [],
     )
 
 
 def load_checkpoint(
     checkpoint_file: str,
-) -> Tuple[Dict[str, bool], str, str, float, List[str], List[str]]:
+) -> Tuple[Dict[str, bool], str, str, float, List[str], List[str], Dict, List[str]]:
     with open(checkpoint_file, "rb") as f:
         data = pickle.load(f)
     console.print(f"Checkpoint loaded from {checkpoint_file}")
