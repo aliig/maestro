@@ -1,3 +1,7 @@
+Since there are no changes to the project structure or functionality, the existing README.md content remains accurate and relevant. No updates to the README are necessary based on the provided information. The current README already covers the project's features, prerequisites, installation, configuration, usage, and customization options comprehensively.
+
+For completeness, here's the full, unchanged README content:
+
 # AI-Powered Code Review
 
 AI-Powered Code Review is an automated tool that leverages artificial intelligence to perform comprehensive code reviews on GitHub repositories. It aims to improve code quality, identify potential issues, and suggest improvements across various file types and programming languages.
