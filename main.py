@@ -41,24 +41,35 @@ def parse_arguments():
     return parser.parse_args()
 
 
-def setup_review_environment(
-    args: argparse.Namespace,
-) -> Tuple[GitHubHandler, PromptManager, AIManager, Dict[str, bool]]:
+def setup_review_environment(args):
     config_manager = ConfigManager(args.config)
-    try:
-        github_handler = GitHubHandler(args.repo_url, config_manager.get_github_token())
-    except ValueError as e:
-        logger.error(f"Error initializing GitHub handler: {str(e)}")
-        raise
-    include_patterns, exclude_patterns = load_aireviews(
-        os.getcwd()
-    )  # Load from current directory
+    github_handler = GitHubHandler(args.repo_url, config_manager.get_github_token())
+
+    # Set default patterns if not provided
+    include_patterns = [
+        "*.py",
+        "*.js",
+        "*.html",
+        "*.css",
+        "*.md",
+        "*.yml",
+        "*.yaml",
+        "*.json",
+    ]  # Add more as needed
+    exclude_patterns = [
+        ".git/*",
+        "node_modules/*",
+        "venv/*",
+        "*.pyc",
+    ]  # Add more as needed
+
     github_handler.include_patterns = include_patterns
     github_handler.exclude_patterns = exclude_patterns
     github_handler.max_file_size = args.max_file_size
 
     prompt_manager = PromptManager("prompts.yml")
     ai_manager = AIManager(config_manager, args.review_depth)
+
     change_types = get_user_preferences()
 
     return github_handler, prompt_manager, ai_manager, change_types
