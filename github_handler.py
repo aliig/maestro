@@ -1,8 +1,10 @@
+import fnmatch
 import os
 import shutil
 import tempfile
 import time
 
+import chardet
 from git import Repo
 from github import Github
 
@@ -10,22 +12,21 @@ from logger import logger
 
 
 class GitHubHandler:
-    def __init__(self, repo_url, token, file_types=None, exclude_dirs=None):
+    def __init__(
+        self,
+        repo_url,
+        token,
+        include_patterns=None,
+        exclude_patterns=None,
+        max_file_size=1024 * 1024,
+    ):
         self.g = Github(token)
         self.repo = self.g.get_repo(repo_url)
         self.local_path = None
         self.branch_name = f"ai-code-review-{int(time.time())}"
-        self.file_types = file_types or [
-            ".py",
-            ".js",
-            ".java",
-            ".cs",
-            ".cpp",
-            ".h",
-            ".rb",
-            ".go",
-        ]
-        self.exclude_dirs = exclude_dirs or []
+        self.include_patterns = include_patterns or ["*"]
+        self.exclude_patterns = exclude_patterns or []
+        self.max_file_size = max_file_size  # Default to 1MB
         self.clone_repo()
         self.create_new_branch()
 
@@ -44,52 +45,80 @@ class GitHubHandler:
         current.checkout()
         logger.info(f"Created and checked out new branch: {self.branch_name}")
 
+    def is_binary_file(self, file_path):
+        with open(file_path, "rb") as file:
+            chunk = file.read(1024)  # Read first 1024 bytes
+            result = chardet.detect(chunk)
+            if result["encoding"] is None:
+                return True
+            return False
+
     def get_repo_structure(self):
         structure = {}
         for root, dirs, files in os.walk(self.local_path):
-            # Skip excluded directories
-            dirs[:] = [d for d in dirs if d not in self.exclude_dirs]
-
             path = root.split(os.sep)
             current_level = structure
             for folder in path[path.index(os.path.basename(self.local_path)) + 1 :]:
                 current_level = current_level.setdefault(folder, {})
             for file in files:
-                if any(file.endswith(ft) for ft in self.file_types):
+                if self.should_include_file(file):
                     file_path = os.path.join(root, file)
-                    with open(file_path, "r") as f:
-                        content = f.read()
-                    current_level[file] = content
+                    if os.path.getsize(
+                        file_path
+                    ) <= self.max_file_size and not self.is_binary_file(file_path):
+                        try:
+                            with open(file_path, "rb") as f:
+                                raw_data = f.read()
+                            result = chardet.detect(raw_data)
+                            encoding = result["encoding"] or "utf-8"
+                            content = raw_data.decode(encoding)
+                            current_level[file] = content
+                        except UnicodeDecodeError:
+                            # If we still can't decode it, skip this file
+                            pass
         return structure
+
+    def should_include_file(self, filename):
+        return any(
+            fnmatch.fnmatch(filename, pattern) for pattern in self.include_patterns
+        ) and not any(
+            fnmatch.fnmatch(filename, pattern) for pattern in self.exclude_patterns
+        )
 
     def commit_changes(self, changes):
         repo = Repo(self.local_path)
-        renamed_files = set()
-
         for operation, details in changes.items():
             if operation == "modify":
                 for file_path, content in details.items():
-                    self._modify_file(repo, file_path, content)
+                    full_path = os.path.join(self.local_path, file_path)
+                    os.makedirs(os.path.dirname(full_path), exist_ok=True)
+                    with open(full_path, "w", encoding="utf-8") as f:
+                        f.write(content)
+                    repo.index.add([file_path])
             elif operation == "delete":
                 for file_path in details:
-                    if file_path not in renamed_files:
-                        self._delete_file(repo, file_path)
+                    full_path = os.path.join(self.local_path, file_path)
+                    if os.path.exists(full_path):
+                        os.remove(full_path)
+                        repo.index.remove([file_path])
             elif operation == "rename":
                 for old_path, new_path in details.items():
-                    self._rename_file(repo, old_path, new_path)
-                    renamed_files.add(old_path)
+                    old_full_path = os.path.join(self.local_path, old_path)
+                    new_full_path = os.path.join(self.local_path, new_path)
+                    os.makedirs(os.path.dirname(new_full_path), exist_ok=True)
+                    os.rename(old_full_path, new_full_path)
+                    repo.index.move([old_path, new_path])
             elif operation == "mkdir":
                 for dir_path in details:
-                    self._create_directory(dir_path)
+                    full_path = os.path.join(self.local_path, dir_path)
+                    os.makedirs(full_path, exist_ok=True)
 
         if repo.index.diff("HEAD"):
-            commit_message = "AI code review changes: Complete refactor"
+            commit_message = "AI code review changes"
             repo.index.commit(commit_message)
             origin = repo.remote(name="origin")
             origin.push(self.branch_name)
-            logger.info(
-                f"Committed and pushed refactor changes to branch: {self.branch_name}"
-            )
+            logger.info(f"Committed and pushed changes to branch: {self.branch_name}")
         else:
             logger.info("No changes to commit")
 

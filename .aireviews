@@ -1,0 +1,35 @@
+# Include all files by default
+*
+
+# Exclude common binary and large file types
+*.jpg
+*.jpeg
+*.png
+*.gif
+*.ico
+*.svg
+*.woff
+*.woff2
+*.ttf
+*.eot
+*.pdf
+*.zip
+*.tar.gz
+*.mp3
+*.mp4
+*.avi
+*.mov
+
+# Exclude common directories
+node_modules/
+vendor/
+.git/
+.idea/
+.vscode/
+
+# Include specific config files that might be excluded by default
+!.gitignore
+!.dockerignore
+!.vscode/settings.json
+
+# You can add more specific rules here
