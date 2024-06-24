@@ -200,6 +200,8 @@ def perform_code_review(
 
             except Exception as e:
                 logger.error(f"Error during code review iteration: {str(e)}")
+                # Log the full traceback for debugging purposes
+                logger.exception("Full traceback:")
                 # Optionally, you can decide to break the loop or continue to the next iteration
                 # For now, we'll continue to the next iteration
                 continue
@@ -253,6 +255,8 @@ def main():
 
     except Exception as e:
         logger.error(f"An error occurred during the review process: {str(e)}")
+        # Log the full traceback for debugging purposes
+        logger.exception("Full traceback:")
         sys.exit(1)
     finally:
         if 'github_handler' in locals():
