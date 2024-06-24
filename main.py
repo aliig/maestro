@@ -19,9 +19,9 @@ from utils import (
 
 console = Console()
 
-
 def setup_review_environment():
     config_manager = ConfigManager("config.yml")
+    config_manager.validate_config()
 
     (
         preferences,
@@ -59,7 +59,6 @@ def setup_review_environment():
         previous_results,
     )
 
-
 def parse_orchestrator_response(response):
     pattern = r"STATUS: (.+)\nNEXT_ACTION: (.+)\nTARGET: (.+)\nREASONING: (.+)"
     match = re.search(pattern, response, re.DOTALL)
@@ -71,7 +70,6 @@ def parse_orchestrator_response(response):
             "reasoning": match.group(4).strip(),
         }
     return None
-
 
 def perform_code_review(
     github_handler: GitHubHandler,
@@ -89,71 +87,75 @@ def perform_code_review(
 
     logger.info("Performing code review...")
 
-    while True:
-        orchestrator_prompt = prompt_manager.get_orchestrator_prompt(
-            repo_structure,
-            review_depth,
-            preferences,
-            "\n".join(previous_results),
-            additional_instructions,
-        )
-        orchestrator_result = ai_manager.call_ai(orchestrator_prompt)
-        logger.info(f"Orchestrator prompt: {orchestrator_prompt}")
-        logger.info(f"Orchestrator result: {orchestrator_result}")
+    with Progress() as progress:
+        review_task = progress.add_task("[cyan]Reviewing code...", total=None)
 
-        parsed_result = parse_orchestrator_response(orchestrator_result)
-
-        if not parsed_result:
-            logger.warning(
-                "Failed to parse orchestrator response. Continuing with next iteration."
+        while True:
+            orchestrator_prompt = prompt_manager.get_orchestrator_prompt(
+                repo_structure,
+                review_depth,
+                preferences,
+                "\n".join(previous_results),
+                additional_instructions,
             )
-            continue
+            orchestrator_result = ai_manager.call_ai(orchestrator_prompt)
+            logger.debug(f"Orchestrator prompt: {orchestrator_prompt}")
+            logger.debug(f"Orchestrator result: {orchestrator_result}")
 
-        if parsed_result["status"] == "COMPLETE":
-            logger.info(
-                "Review process complete. Reason: " + parsed_result["reasoning"]
-            )
-            break
+            parsed_result = parse_orchestrator_response(orchestrator_result)
 
-        if parsed_result["next_action"] == "REVIEW":
-            sub_agent_prompt = prompt_manager.get_sub_agent_prompt(
-                parsed_result["reasoning"], repo_structure
-            )
-
-            logger.info(
-                f"Sub-agent prompt: {sub_agent_prompt[:100]}..."
-            )  # Log first 100 chars
-            sub_agent_result = ai_manager.call_ai(sub_agent_prompt)
-            logger.info(
-                f"Sub-agent result: {sub_agent_result[:100]}..."
-            )  # Log first 100 chars
-
-            changes = parse_sub_agent_result(sub_agent_result)
-            logger.info(f"Parsed changes: {changes}")
-
-            if changes:
-                github_handler.commit_changes(changes)
-                changes_summary.append(
-                    f"- Iteration {len(previous_results) + 1}: {sum(len(details) for details in changes.values())} operation(s) performed"
+            if not parsed_result:
+                logger.warning(
+                    "Failed to parse orchestrator response. Continuing with next iteration."
                 )
-                previous_results.append(sub_agent_result)
+                continue
 
-                # Update repo_structure with the latest changes
-                repo_structure = github_handler.get_repo_structure()
-            else:
-                logger.info("No changes proposed in this iteration.")
+            if parsed_result["status"] == "COMPLETE":
+                logger.info(
+                    "Review process complete. Reason: " + parsed_result["reasoning"]
+                )
+                break
 
-        save_checkpoint(
-            "review_checkpoint.pkl",
-            preferences,
-            review_depth,
-            github_handler.repo.html_url,
-            repo_structure,
-            previous_results,
-        )
+            if parsed_result["next_action"] == "REVIEW":
+                sub_agent_prompt = prompt_manager.get_sub_agent_prompt(
+                    parsed_result["reasoning"], repo_structure
+                )
+
+                logger.debug(
+                    f"Sub-agent prompt: {sub_agent_prompt[:100]}..."
+                )  # Log first 100 chars
+                sub_agent_result = ai_manager.call_ai(sub_agent_prompt)
+                logger.debug(
+                    f"Sub-agent result: {sub_agent_result[:100]}..."
+                )  # Log first 100 chars
+
+                changes = parse_sub_agent_result(sub_agent_result)
+                logger.info(f"Parsed changes: {changes}")
+
+                if changes:
+                    github_handler.commit_changes(changes)
+                    changes_summary.append(
+                        f"- Iteration {len(previous_results) + 1}: {sum(len(details) for details in changes.values())} operation(s) performed"
+                    )
+                    previous_results.append(sub_agent_result)
+
+                    # Update repo_structure with the latest changes
+                    repo_structure = github_handler.get_repo_structure()
+                else:
+                    logger.info("No changes proposed in this iteration.")
+
+            save_checkpoint(
+                "review_checkpoint.pkl",
+                preferences,
+                review_depth,
+                github_handler.repo.html_url,
+                repo_structure,
+                previous_results,
+            )
+
+            progress.update(review_task, advance=1)
 
     return changes_summary, [original_structure, original_readme]
-
 
 def main():
     logger.info("Starting AI-Powered Code Review")
@@ -202,9 +204,8 @@ def main():
     finally:
         github_handler.cleanup()
         logger.info("Temporary files cleaned up. Review process finished.")
-        # if os.path.exists("review_checkpoint.pkl"):
-        #     os.remove("review_checkpoint.pkl")
-
+        if os.path.exists("review_checkpoint.pkl"):
+            os.remove("review_checkpoint.pkl")
 
 if __name__ == "__main__":
     main()
