@@ -16,9 +16,8 @@ from utils import preprocess_ai_response
 class GitHubHandler:
     def __init__(self, repo_url, token):
         self.g = Github(token)
-        self.token = token  # Store the token
+        self.token = token
         try:
-            # Extract owner and repo name from URL
             parsed_url = urlparse(repo_url)
             path_parts = parsed_url.path.strip("/").split("/")
             if len(path_parts) < 2:
@@ -76,35 +75,28 @@ class GitHubHandler:
 
                 path = root.split(os.sep)
                 current_level = structure
-                for folder in path[path.index(os.path.basename(self.local_path)) + 1 :]:
+                for folder in path[path.index(os.path.basename(self.local_path)) + 1:]:
                     current_level = current_level.setdefault(folder, {})
 
                 for file in files:
                     if self.should_include_file(file):
                         file_path = os.path.join(root, file)
                         relative_path = os.path.relpath(file_path, self.local_path)
-                        if os.path.getsize(
-                            file_path
-                        ) <= self.max_file_size and not self.is_binary_file(file_path):
+                        if os.path.getsize(file_path) <= self.max_file_size and not self.is_binary_file(file_path):
                             try:
                                 with open(file_path, "r", encoding="utf-8") as f:
                                     content = f.read()
                                 current_level[relative_path] = content
                             except UnicodeDecodeError:
-                                current_level[relative_path] = (
-                                    "<<< Unable to decode file content >>>"
-                                )
+                                current_level[relative_path] = "<<< Unable to decode file content >>>"
                         else:
-                            current_level[relative_path] = (
-                                "<<< File too large or binary >>>"
-                            )
+                            current_level[relative_path] = "<<< File too large or binary >>>"
             return structure
         except Exception as e:
             logger.error(f"Error getting repository structure: {str(e)}")
             raise
 
     def should_include_file(self, filename):
-        # Check if the file should be included based on include/exclude patterns
         return any(
             self._match_pattern(filename, pattern) for pattern in self.include_patterns
         ) and not any(
@@ -123,18 +115,15 @@ class GitHubHandler:
             return True
 
     def get_current_file_path(self, original_path):
-        # Check if the file exists at the original path
         if os.path.exists(os.path.join(self.local_path, original_path)):
             return original_path
 
-        # If not, search for the file in the repository
         for root, dirs, files in os.walk(self.local_path):
             if os.path.basename(original_path) in files:
                 return os.path.relpath(
                     os.path.join(root, os.path.basename(original_path)), self.local_path
                 )
 
-        # If file not found, return the original path
         return original_path
 
     def commit_changes(self, changes):
@@ -170,13 +159,10 @@ class GitHubHandler:
 
             if repo.index.diff("HEAD"):
                 commit_message = "AI code review changes"
-                # Use Git's whitespace handling
-                repo.git.commit("-m", commit_message)
+                repo.index.commit(commit_message)
                 origin = repo.remote(name="origin")
                 origin.push(self.branch_name)
-                logger.info(
-                    f"Committed and pushed changes to branch: {self.branch_name}"
-                )
+                logger.info(f"Committed and pushed changes to branch: {self.branch_name}")
             else:
                 logger.info("No changes to commit")
         except Exception as e:
