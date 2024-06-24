@@ -8,7 +8,7 @@ from typing import Any, Dict, List
 
 import anthropic
 import openai
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
 
 from logger import logger
 
@@ -100,7 +100,7 @@ class AIManager:
     @retry(
         retry=retry_if_exception_type((anthropic.RateLimitError, openai.RateLimitError)),
         stop=stop_after_attempt(3),
-        wait=wait_fixed(60),
+        wait=wait_exponential(multiplier=1, min=4, max=10),
     )
     def _call_ai_with_retry(self, platform, prompt: str):
         try:
