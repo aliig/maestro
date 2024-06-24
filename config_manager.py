@@ -1,17 +1,24 @@
 from typing import Any, Dict, List
-
 import yaml
-
+import os
 
 class ConfigValidationError(Exception):
     pass
 
-
 class ConfigManager:
     def __init__(self, config_file):
-        with open(config_file, "r") as f:
-            self.config = yaml.safe_load(f)
+        self.config_file = config_file
+        self.config = self.load_config()
         self.validate_config()
+
+    def load_config(self) -> Dict[str, Any]:
+        try:
+            with open(self.config_file, "r") as f:
+                return yaml.safe_load(f)
+        except FileNotFoundError:
+            raise ConfigValidationError(f"Config file not found: {self.config_file}")
+        except yaml.YAMLError as e:
+            raise ConfigValidationError(f"Error parsing YAML in config file: {str(e)}")
 
     def validate_config(self):
         required_keys = ["github_token", "ai_platforms"]
@@ -54,3 +61,29 @@ class ConfigManager:
 
     def get_value(self, key: str, default: Any = None) -> Any:
         return self.config.get(key, default)
+
+    def update_config(self, key: str, value: Any):
+        self.config[key] = value
+        self.save_config()
+
+    def save_config(self):
+        try:
+            with open(self.config_file, "w") as f:
+                yaml.dump(self.config, f, default_flow_style=False)
+        except Exception as e:
+            raise ConfigValidationError(f"Error saving config file: {str(e)}")
+
+    @staticmethod
+    def get_env_variable(var_name: str) -> str:
+        value = os.environ.get(var_name)
+        if not value:
+            raise ConfigValidationError(f"Environment variable {var_name} is not set")
+        return value
+
+    def load_env_variables(self):
+        self.config["github_token"] = self.get_env_variable("GITHUB_TOKEN")
+        for platform in self.config["ai_platforms"]:
+            if platform["provider"] == "anthropic":
+                platform["keys"] = self.get_env_variable("ANTHROPIC_API_KEY").split(",")
+            elif platform["provider"] == "openai":
+                platform["keys"] = self.get_env_variable("OPENAI_API_KEY").split(",")
