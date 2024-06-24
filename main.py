@@ -21,7 +21,7 @@ from utils import (
 console = Console()
 
 
-def parse_arguments() -> argparse.Namespace:
+def parse_arguments():
     parser = argparse.ArgumentParser(description="AI-Powered Code Review")
     parser.add_argument("repo_url", help="GitHub repository URL")
     parser.add_argument(
@@ -45,7 +45,11 @@ def setup_review_environment(
     args: argparse.Namespace,
 ) -> Tuple[GitHubHandler, PromptManager, AIManager, Dict[str, bool]]:
     config_manager = ConfigManager(args.config)
-    github_handler = GitHubHandler(args.repo_url, config_manager.get_github_token())
+    try:
+        github_handler = GitHubHandler(args.repo_url, config_manager.get_github_token())
+    except ValueError as e:
+        logger.error(f"Error initializing GitHub handler: {str(e)}")
+        raise
     include_patterns, exclude_patterns = load_aireviews(
         os.getcwd()
     )  # Load from current directory

@@ -72,35 +72,36 @@ class OpenAIGPT(AIInterface):
 
 
 class AIManager:
-    def __init__(self, config_manager, depth):
+    def __init__(self, config_manager, depth, ai_model):
         self.config_manager = config_manager
-        self.ai_platforms = self._initialize_ai_platforms()
+        self.ai_platforms = self._initialize_ai_platforms(ai_model)
         self.current_platform_index = 0
         self.review_settings = config_manager.get_review_settings(depth)
         self.tokens_used = 0
 
-    def _initialize_ai_platforms(self) -> List[AIInterface]:
+    def _initialize_ai_platforms(self, ai_model) -> List[AIInterface]:
         ai_platforms = []
         ai_keys = self.config_manager.get_ai_keys()
         platforms_config = self.config_manager.get_ai_platforms()
+        print(platforms_config)
 
-        for platform, config in platforms_config.items():
-            provider = config["provider"]
-            api_keys = ai_keys[provider]
-            model = config["model"]
-            max_tokens = config["max_tokens"]
+        if ai_model not in platforms_config:
+            raise ValueError(f"Unsupported AI model: {ai_model}")
 
-            if not isinstance(api_keys, list):
-                api_keys = [api_keys]
+        config = platforms_config[ai_model]
+        provider = config["provider"]
+        api_keys = ai_keys[provider]
+        model = config["model"]
+        max_tokens = config["max_tokens"]
 
-            for api_key in api_keys:
-                match provider:
-                    case "anthropic":
-                        ai_platforms.append(AnthropicAI(api_key, model, max_tokens))
-                    case "openai":
-                        ai_platforms.append(OpenAIGPT(api_key, model, max_tokens))
-                    case _:
-                        raise ValueError(f"Unsupported AI provider: {provider}")
+        if not isinstance(api_keys, list):
+            api_keys = [api_keys]
+
+        for api_key in api_keys:
+            if provider == "anthropic":
+                ai_platforms.append(AnthropicAI(api_key, model, max_tokens))
+            elif provider == "openai":
+                ai_platforms.append(OpenAIGPT(api_key, model, max_tokens))
 
         return ai_platforms
 

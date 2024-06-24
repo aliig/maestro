@@ -3,38 +3,39 @@ import os
 import shutil
 import tempfile
 import time
+from urllib.parse import urlparse
 
 import chardet
 from git import Repo
-from github import Github
+from github import Github, GithubException
 
 from logger import logger
 
 
 class GitHubHandler:
-    def __init__(
-        self,
-        repo_url,
-        token,
-        include_patterns=None,
-        exclude_patterns=None,
-        max_file_size=1024 * 1024,
-    ):
+    def __init__(self, repo_url, token):
         self.g = Github(token)
-        self.repo = self.g.get_repo(repo_url)
+        self.token = token  # Store the token
+        try:
+            # Extract owner and repo name from URL
+            parsed_url = urlparse(repo_url)
+            path_parts = parsed_url.path.strip("/").split("/")
+            if len(path_parts) < 2:
+                raise ValueError(f"Invalid repository URL format: {repo_url}")
+            owner, repo_name = path_parts[-2:]
+            self.repo = self.g.get_repo(f"{owner}/{repo_name}")
+        except Exception as e:
+            raise ValueError(f"Error accessing repository: {str(e)}")
+
         self.local_path = None
         self.branch_name = f"ai-code-review-{int(time.time())}"
-        self.include_patterns = include_patterns or ["*"]
-        self.exclude_patterns = exclude_patterns or []
-        self.max_file_size = max_file_size  # Default to 1MB
         self.clone_repo()
         self.create_new_branch()
 
     def clone_repo(self):
         self.local_path = tempfile.mkdtemp()
         clone_url = self.repo.clone_url.replace(
-            "https://",
-            f"https://{self.g.get_user().login}:{self.g._Github__requester._Github__auth.token}@",
+            "https://", f"https://x-access-token:{self.token}@"
         )
         Repo.clone_from(clone_url, self.local_path)
         logger.info(f"Repository cloned to {self.local_path}")

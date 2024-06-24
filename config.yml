@@ -1,12 +1,16 @@
+github_token: "place github token here"
+
 ai_platforms:
-  claude:
-    provider: "anthropic"
+  - provider: "anthropic"
     model: "claude-3-5-sonnet-20240620"
     max_tokens: 4096
-  gpt4:
-    provider: "openai"
+    keys:
+    - "place api key here (accepts list of keys)"
+  - provider: "openai"
     model: "gpt-4"
     max_tokens: 8192
+    keys:
+    - "place api key here (accepts list of keys)"
 
 review_settings:
   depth:
