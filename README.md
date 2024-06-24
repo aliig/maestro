@@ -91,23 +91,10 @@ vendor/
 !important_config.log
 ```
 
-## Error Handling and Logging
-
-The tool now includes improved error handling and logging. If you encounter any issues, check the console output for detailed error messages and the `ai_code_review.log` file for a complete log of the review process.
-
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
-[Add your chosen license here]
-
-## Changelog
-
-### [Version X.X.X] - YYYY-MM-DD
-- Added improved error handling and logging
-- Implemented progress indication during code review
-- Enhanced retry mechanism for AI API calls
-- Added configuration validation
-- Various code style and documentation improvements
+This project is released under the MIT License.
