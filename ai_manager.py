@@ -92,6 +92,7 @@ class AIManager:
         self.config_manager = config_manager
         self.ai_platforms = self._initialize_ai_platforms()
         self.platform_queue = deque(self.ai_platforms)
+        self.max_retries = self.config_manager.get_value("max_retries", 3)
 
     def _initialize_ai_platforms(self) -> List[AIInterface]:
         ai_platforms = []
@@ -107,7 +108,7 @@ class AIManager:
                 elif provider == "openai":
                     ai_platforms.append(OpenAIGPT(key, model))
                 else:
-                    raise Exception(f"Invalid AI provider: {provider}")
+                    raise ValueError(f"Invalid AI provider: {provider}")
 
         return ai_platforms
 
