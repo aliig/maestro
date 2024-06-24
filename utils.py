@@ -71,12 +71,21 @@ def parse_sub_agent_result(result):
     changes = {"modify": {}, "delete": [], "rename": {}, "mkdir": []}
     current_file = None
     current_content = []
+    in_python_code = False
 
     for line in result.split("\n"):
         if line.startswith("MODIFY:") or line.startswith("CREATE:"):
             if current_file:
                 changes["modify"][current_file] = "\n".join(current_content)
             current_file = line.split(":")[1].strip()
+            current_content = []
+            in_python_code = False
+        elif line.strip() == "<PYTHON_CODE>":
+            in_python_code = True
+        elif line.strip() == "</PYTHON_CODE>":
+            in_python_code = False
+            changes["modify"][current_file] = "\n".join(current_content)
+            current_file = None
             current_content = []
         elif line.startswith("DELETE:"):
             file_to_delete = line.split("DELETE:")[1].strip()
@@ -87,11 +96,7 @@ def parse_sub_agent_result(result):
         elif line.startswith("MKDIR:"):
             dir_to_create = line.split("MKDIR:")[1].strip()
             changes["mkdir"].append(dir_to_create)
-        elif current_file:
+        elif in_python_code:
             current_content.append(line)
 
-    if current_file:
-        changes["modify"][current_file] = "\n".join(current_content)
-
-    # Remove empty change types
     return {k: v for k, v in changes.items() if v}

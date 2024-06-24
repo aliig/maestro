@@ -34,7 +34,6 @@ orchestrator:
 sub_agent:
   base: |
     Based on the following task, provide specific code changes or additions to address the issue.
-    This may include complete refactoring and directory tree reorganization if necessary.
     Be concise and focus on the most critical changes.
 
     Task: {task}
@@ -45,9 +44,9 @@ sub_agent:
     Provide your response in the following format:
     - To create or modify a file:
       MODIFY: FILE_PATH
-      ```python
-      # Your code changes here
-      ```
+      <PYTHON_CODE>
+      # Paste the entire content of the proposed file here, including unchanged portions.
+      </PYTHON_CODE>
 
     - To delete a file:
       DELETE: FILE_PATH
@@ -58,5 +57,11 @@ sub_agent:
     - To create a new directory:
       MKDIR: DIRECTORY_PATH
 
-    If multiple operations are needed, provide each operation on a new line.
-    For extensive refactoring, you can combine these operations as needed.
+    If multiple files need to be changed, repeat the above format for each file.
+    If no changes are needed, explicitly state "NO_CHANGES_NEEDED".
+
+    Remember:
+    1. Always provide the complete file content for MODIFY operations, not just the changed parts.
+    2. Do not use markdown formatting or code block syntax (```).
+    3. Do not include comments about unchanged sections or use ellipsis (...).
+    4. Ensure all code is properly indented and formatted as it would appear in a Python file.
