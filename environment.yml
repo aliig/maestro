@@ -12,3 +12,4 @@ dependencies:
     - rich
     - anthropic
     - openai
+    - chardet
