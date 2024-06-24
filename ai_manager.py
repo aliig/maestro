@@ -72,36 +72,29 @@ class OpenAIGPT(AIInterface):
 
 
 class AIManager:
-    def __init__(self, config_manager, depth, ai_model):
+    def __init__(self, config_manager, depth):
         self.config_manager = config_manager
-        self.ai_platforms = self._initialize_ai_platforms(ai_model)
+        self.ai_platforms = self._initialize_ai_platforms()
         self.current_platform_index = 0
         self.review_settings = config_manager.get_review_settings(depth)
         self.tokens_used = 0
 
-    def _initialize_ai_platforms(self, ai_model) -> List[AIInterface]:
+    def _initialize_ai_platforms(self) -> List[AIInterface]:
         ai_platforms = []
-        ai_keys = self.config_manager.get_ai_keys()
-        platforms_config = self.config_manager.get_ai_platforms()
-        print(platforms_config)
+        platforms = self.config_manager.get_ai_platforms()
 
-        if ai_model not in platforms_config:
-            raise ValueError(f"Unsupported AI model: {ai_model}")
-
-        config = platforms_config[ai_model]
-        provider = config["provider"]
-        api_keys = ai_keys[provider]
-        model = config["model"]
-        max_tokens = config["max_tokens"]
-
-        if not isinstance(api_keys, list):
-            api_keys = [api_keys]
-
-        for api_key in api_keys:
-            if provider == "anthropic":
-                ai_platforms.append(AnthropicAI(api_key, model, max_tokens))
-            elif provider == "openai":
-                ai_platforms.append(OpenAIGPT(api_key, model, max_tokens))
+        for platform in platforms:
+            provider = platform["provider"]
+            keys = platform["keys"]
+            model = platform["model"]
+            max_tokens = platform["max_tokens"]
+            for key in keys:
+                if provider == "anthropic":
+                    ai_platforms.append(AnthropicAI(key, model, max_tokens))
+                elif provider == "openai":
+                    ai_platforms.append(OpenAIGPT(key, model, max_tokens))
+                else:
+                    raise Exception(f"Invalid AI provider: {provider}")
 
         return ai_platforms
 
