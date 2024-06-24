@@ -2,11 +2,14 @@ import json
 import re
 import time
 from abc import ABC, abstractmethod
+from collections import deque
 from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 import anthropic
 import openai
+import tiktoken
+from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_fixed
 
 
 class AIInterface(ABC):
@@ -75,9 +78,10 @@ class AIManager:
     def __init__(self, config_manager, depth):
         self.config_manager = config_manager
         self.ai_platforms = self._initialize_ai_platforms()
-        self.current_platform_index = 0
+        self.platform_queue = deque(self.ai_platforms)
         self.review_settings = config_manager.get_review_settings(depth)
         self.tokens_used = 0
+        self.token_encoder = tiktoken.encoding_for_model("gpt-4")
 
     def _initialize_ai_platforms(self) -> List[AIInterface]:
         ai_platforms = []
@@ -98,6 +102,22 @@ class AIManager:
 
         return ai_platforms
 
+    def _call_ai_with_retry(cls, platform, prompt: str, max_tokens: int):
+        try:
+            return platform.call_ai(prompt, max_tokens)
+        except (anthropic.RateLimitError, openai.RateLimitError) as e:
+            wait_time = platform.get_rate_limit_reset_time(e)
+            print(
+                f"Rate limit reached for {platform.__class__.__name__}. Waiting time: {wait_time:.2f} seconds."
+            )
+            time.sleep(
+                min(wait_time, 60)
+            )  # Wait for the shorter of wait_time or 60 seconds
+            raise  # Re-raise the exception to trigger a retry
+        except Exception as e:
+            print(f"Error calling AI platform {platform.__class__.__name__}: {str(e)}")
+            raise  # Re-raise the exception to trigger a retry
+
     def call_ai(self, prompt: str) -> str:
         if self.tokens_used >= self.review_settings["token_budget"]:
             raise Exception("Token budget exceeded. Review process halted.")
@@ -107,43 +127,21 @@ class AIManager:
             self.review_settings["token_budget"] - self.tokens_used,
         )
 
-        start_index = self.current_platform_index
         for _ in range(len(self.ai_platforms)):
+            current_platform = self.platform_queue[0]
             try:
-                result = self.ai_platforms[self.current_platform_index].call_ai(
-                    prompt, max_tokens
-                )
+                result = self._call_ai_with_retry(current_platform, prompt, max_tokens)
                 self.tokens_used += self._estimate_tokens(
                     prompt
                 ) + self._estimate_tokens(result)
                 return result
-            except (anthropic.RateLimitError, openai.RateLimitError) as e:
-                wait_time = self.ai_platforms[
-                    self.current_platform_index
-                ].get_rate_limit_reset_time(e)
-                print(
-                    f"Rate limit reached for API key {self.current_platform_index}. Waiting time: {wait_time:.2f} seconds."
-                )
+            except Exception:
+                self.platform_queue.rotate(-1)  # Move the current platform to the end
 
-                # Move to the next API key
-                self.current_platform_index = (self.current_platform_index + 1) % len(
-                    self.ai_platforms
-                )
-
-                # If we've tried all keys and are back to the start, wait for the shortest reset time
-                if self.current_platform_index == start_index:
-                    time.sleep(wait_time)
-            except Exception as e:
-                print(f"Error calling AI platform: {str(e)}")
-                self.current_platform_index = (self.current_platform_index + 1) % len(
-                    self.ai_platforms
-                )
-
-        raise Exception("Max retries reached. Unable to call any AI platform.")
+        raise Exception("All AI platforms exhausted. Unable to complete the request.")
 
     def _estimate_tokens(self, text: str) -> int:
-        # A simple estimation: 1 token ≈ 4 characters
-        return len(text) // 4
+        return len(self.token_encoder.encode(text))
 
     def analyze_changes_and_update_readme(
         self, original_structure, new_structure, original_readme, changes_summary

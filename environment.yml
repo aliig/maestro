@@ -13,3 +13,5 @@ dependencies:
     - anthropic
     - openai
     - chardet
+    - tenacity
+    - tiktoken
