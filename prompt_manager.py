@@ -12,7 +12,7 @@ class PromptManager:
         self,
         repo_structure,
         review_depth,
-        change_types,
+        preferences,
         previous_results,
         additional_instructions,
     ):
@@ -20,8 +20,8 @@ class PromptManager:
         all_areas = set(self.prompts["orchestrator"]["focus_areas"].keys())
         focus_areas = [
             area
-            for area in change_types
-            if change_types[area] and area != "additional_instructions"
+            for area in preferences
+            if preferences[area] and area != "additional_instructions"
         ]
         ignore_areas = all_areas - set(focus_areas)
 

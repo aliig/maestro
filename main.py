@@ -30,6 +30,8 @@ def setup_review_environment():
         max_file_size_mb,
         include_patterns,
         exclude_patterns,
+        repo_structure,
+        previous_results,
     ) = get_user_preferences()
 
     github_handler = GitHubHandler(repo_url, config_manager.get_github_token())
@@ -43,7 +45,19 @@ def setup_review_environment():
     prompt_manager = PromptManager("prompts.yml")
     ai_manager = AIManager(config_manager, review_depth)
 
-    return github_handler, prompt_manager, ai_manager, preferences, review_depth
+    if repo_structure is None:
+        logger.info("Analyzing repository structure...")
+        repo_structure = github_handler.get_repo_structure()
+
+    return (
+        github_handler,
+        prompt_manager,
+        ai_manager,
+        preferences,
+        review_depth,
+        repo_structure,
+        previous_results,
+    )
 
 
 def parse_orchestrator_response(response):
@@ -63,18 +77,15 @@ def perform_code_review(
     github_handler: GitHubHandler,
     prompt_manager: PromptManager,
     ai_manager: AIManager,
-    change_types: Dict[str, bool],
+    preferences: Dict[str, bool],
     review_depth: str,
+    repo_structure: Dict,
+    previous_results: List[str],
 ) -> Tuple[List[str], List[str]]:
-    if repo_structure is None:
-        logger.info("Analyzing repository structure...")
-        repo_structure = github_handler.get_repo_structure()
-        previous_results = []
-
     original_structure = repo_structure.copy()
     original_readme = github_handler.get_readme_content()
     changes_summary = []
-    additional_instructions = change_types.get("additional_instructions", "")
+    additional_instructions = preferences.get("additional_instructions", "")
 
     logger.info("Performing code review...")
 
@@ -82,7 +93,7 @@ def perform_code_review(
         orchestrator_prompt = prompt_manager.get_orchestrator_prompt(
             repo_structure,
             review_depth,
-            change_types,
+            preferences,
             "\n".join(previous_results),
             additional_instructions,
         )
@@ -132,7 +143,14 @@ def perform_code_review(
             else:
                 logger.info("No changes proposed in this iteration.")
 
-            save_checkpoint("review_checkpoint.pkl", repo_structure, previous_results)
+        save_checkpoint(
+            "review_checkpoint.pkl",
+            preferences,
+            review_depth,
+            github_handler.repo.html_url,
+            repo_structure,
+            previous_results,
+        )
 
     return changes_summary, [original_structure, original_readme]
 
@@ -140,13 +158,25 @@ def perform_code_review(
 def main():
     logger.info("Starting AI-Powered Code Review")
 
-    github_handler, prompt_manager, ai_manager, preferences, review_depth = (
-        setup_review_environment()
-    )
+    (
+        github_handler,
+        prompt_manager,
+        ai_manager,
+        preferences,
+        review_depth,
+        repo_structure,
+        previous_results,
+    ) = setup_review_environment()
 
     try:
         changes_summary, original_data = perform_code_review(
-            github_handler, prompt_manager, ai_manager, preferences, review_depth
+            github_handler,
+            prompt_manager,
+            ai_manager,
+            preferences,
+            review_depth,
+            repo_structure,
+            previous_results,
         )
 
         logger.info("Code review complete!")
