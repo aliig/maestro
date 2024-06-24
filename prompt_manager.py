@@ -1,7 +1,5 @@
 import json
-
 import yaml
-
 
 class PromptManager:
     def __init__(self, prompt_file):
@@ -83,3 +81,9 @@ class PromptManager:
             changes_summary=changes_summary,
             original_readme=original_readme,
         )
+
+    def get_custom_prompt(self, prompt_key, **kwargs):
+        if prompt_key not in self.prompts:
+            raise ValueError(f"Prompt key '{prompt_key}' not found in prompts.yml")
+        base_prompt = self.prompts[prompt_key]["base"]
+        return base_prompt.format(**kwargs)
