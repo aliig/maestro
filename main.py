@@ -24,43 +24,18 @@ console = Console()
 def setup_review_environment():
     config_manager = ConfigManager("config.yml")
 
-    repo_url = input("Enter the GitHub repository URL: ")
+    (
+        preferences,
+        review_depth,
+        repo_url,
+        max_file_size_mb,
+        include_patterns,
+        exclude_patterns,
+    ) = get_user_preferences()
+
     github_handler = GitHubHandler(repo_url, config_manager.get_github_token())
 
-    review_depth = (
-        input(
-            "Enter review depth (minimum, balanced, or comprehensive) [balanced]: "
-        ).lower()
-        or "balanced"
-    )
-    if review_depth not in ["minimum", "balanced", "comprehensive"]:
-        review_depth = "balanced"
-
-    max_file_size_mb = input("Enter maximum file size to review in megabytes [1]: ")
-    max_file_size_mb = (
-        float(max_file_size_mb)
-        if max_file_size_mb.replace(".", "", 1).isdigit()
-        else 1.0
-    )
     max_file_size = int(max_file_size_mb * 1048576)  # Convert megabytes to bytes
-
-    # Set default patterns if not provided
-    include_patterns = [
-        "*.py",
-        "*.js",
-        "*.html",
-        "*.css",
-        "*.md",
-        "*.yml",
-        "*.yaml",
-        "*.json",
-    ]  # Add more as needed
-    exclude_patterns = [
-        ".git/*",
-        "node_modules/*",
-        "venv/*",
-        "*.pyc",
-    ]  # Add more as needed
 
     github_handler.include_patterns = include_patterns
     github_handler.exclude_patterns = exclude_patterns
@@ -69,9 +44,7 @@ def setup_review_environment():
     prompt_manager = PromptManager("prompts.yml")
     ai_manager = AIManager(config_manager, review_depth)
 
-    change_types = get_user_preferences()
-
-    return github_handler, prompt_manager, ai_manager, change_types, review_depth
+    return github_handler, prompt_manager, ai_manager, preferences, review_depth
 
 
 def parse_orchestrator_response(response):
@@ -169,13 +142,13 @@ def perform_code_review(
 def main():
     logger.info("Starting AI-Powered Code Review")
 
-    github_handler, prompt_manager, ai_manager, change_types, review_depth = (
+    github_handler, prompt_manager, ai_manager, preferences, review_depth = (
         setup_review_environment()
     )
 
     try:
         changes_summary, original_data = perform_code_review(
-            github_handler, prompt_manager, ai_manager, change_types, review_depth
+            github_handler, prompt_manager, ai_manager, preferences, review_depth
         )
 
         logger.info("Code review complete!")
@@ -201,8 +174,8 @@ def main():
     finally:
         github_handler.cleanup()
         logger.info("Temporary files cleaned up. Review process finished.")
-        if os.path.exists("review_checkpoint.pkl"):
-            os.remove("review_checkpoint.pkl")
+        # if os.path.exists("review_checkpoint.pkl"):
+        #     os.remove("review_checkpoint.pkl")
 
 
 if __name__ == "__main__":

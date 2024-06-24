@@ -10,11 +10,26 @@ from rich.prompt import Confirm, Prompt
 console = Console()
 
 
-def get_user_preferences():
-    console.print("\n[bold cyan]Code Review Preferences[/bold cyan]")
-    console.print(
-        "Please specify which areas you'd like the AI to focus on during the review."
-    )
+from typing import Dict, Tuple
+
+from rich.console import Console
+from rich.prompt import Confirm, FloatPrompt, Prompt
+
+console = Console()
+
+
+def get_user_preferences() -> (
+    Tuple[Dict[str, bool], str, str, float, List[str], List[str]]
+):
+    console.print("\n[bold cyan]AI-Powered Code Review[/bold cyan]")
+
+    checkpoint_file = "review_checkpoint.pkl"
+    if os.path.exists(checkpoint_file):
+        resume = Confirm.ask(
+            "A previous review checkpoint was found. Do you want to resume?"
+        )
+        if resume:
+            return load_checkpoint(checkpoint_file)
 
     preferences = {}
     areas = {
@@ -31,38 +46,58 @@ def get_user_preferences():
             f"Include [bold]{area}[/bold] ({description})?", default=True
         )
 
-    # Additional prompt information
+    console.print("\n[bold cyan]Review Settings[/bold cyan]")
+    repo_url = Prompt.ask("Enter the GitHub repository URL")
+    review_depth = Prompt.ask(
+        "Enter review depth",
+        choices=["minimum", "balanced", "comprehensive"],
+        default="balanced",
+    )
+    max_file_size_mb = FloatPrompt.ask(
+        "Enter maximum file size to review in megabytes", default=1.0
+    )
+
+    include_patterns = Prompt.ask(
+        "Enter file patterns to include (comma-separated)",
+        default="*.py,*.js,*.html,*.css,*.md,*.yml,*.yaml,*.json",
+    ).split(",")
+    exclude_patterns = Prompt.ask(
+        "Enter file patterns to exclude (comma-separated)",
+        default=".git/*,node_modules/*,venv/*,*.pyc",
+    ).split(",")
+
     console.print("\n[bold cyan]Additional Review Instructions[/bold cyan]")
     console.print(
         "You can provide additional instructions or context for the AI reviewer."
     )
-    console.print(
-        "This could include specific areas of concern, project-specific guidelines, or any other relevant information."
-    )
-
     additional_instructions = Prompt.ask(
         "Enter additional instructions (press Enter if none)"
     )
     preferences["additional_instructions"] = additional_instructions
 
-    return preferences
+    return (
+        preferences,
+        review_depth,
+        repo_url,
+        max_file_size_mb,
+        include_patterns,
+        exclude_patterns,
+    )
 
 
-def save_checkpoint(
-    checkpoint_file: str, repo_structure: Dict, previous_results: List[str]
-):
+def load_checkpoint(
+    checkpoint_file: str,
+) -> Tuple[Dict[str, bool], str, str, float, List[str], List[str]]:
+    with open(checkpoint_file, "rb") as f:
+        data = pickle.load(f)
+    console.print(f"Checkpoint loaded from {checkpoint_file}")
+    return data
+
+
+def save_checkpoint(checkpoint_file: str, data: Tuple):
     with open(checkpoint_file, "wb") as f:
-        pickle.dump((repo_structure, previous_results), f)
+        pickle.dump(data, f)
     console.print(f"Checkpoint saved to {checkpoint_file}")
-
-
-def load_checkpoint(checkpoint_file: str) -> Tuple[Dict, List[str]]:
-    if os.path.exists(checkpoint_file):
-        with open(checkpoint_file, "rb") as f:
-            repo_structure, previous_results = pickle.load(f)
-        console.print(f"Checkpoint loaded from {checkpoint_file}")
-        return repo_structure, previous_results
-    return None, None
 
 
 def load_aireviews(repo_path: str) -> Tuple[List[str], List[str]]:
