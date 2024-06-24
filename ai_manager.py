@@ -8,9 +8,15 @@ from typing import Any, Dict, List
 
 import anthropic
 import openai
-from tenacity import retry, retry_if_exception_type, stop_after_attempt, wait_exponential
+from tenacity import (
+    retry,
+    retry_if_exception_type,
+    stop_after_attempt,
+    wait_exponential,
+)
 
 from logger import logger
+from utils import clean_diff
 
 
 class AIInterface(ABC):
@@ -106,7 +112,9 @@ class AIManager:
         return ai_platforms
 
     @retry(
-        retry=retry_if_exception_type((anthropic.RateLimitError, openai.RateLimitError)),
+        retry=retry_if_exception_type(
+            (anthropic.RateLimitError, openai.RateLimitError)
+        ),
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=4, max=10),
     )
@@ -121,7 +129,9 @@ class AIManager:
             time.sleep(min(wait_time, 60))
             raise  # Re-raise the exception to trigger a retry
         except Exception as e:
-            logger.error(f"Error calling AI platform {platform.__class__.__name__}: {str(e)}")
+            logger.error(
+                f"Error calling AI platform {platform.__class__.__name__}: {str(e)}"
+            )
             raise  # Re-raise the exception to trigger a retry
 
     def call_ai(self, prompt: str) -> str:
@@ -139,14 +149,24 @@ class AIManager:
     def analyze_changes_and_update_readme(
         self, original_structure, new_structure, original_readme, changes_summary
     ):
+        cleaned_changes = {}
+        for file, content in new_structure.items():
+            if file in original_structure:
+                cleaned_changes[file] = clean_diff(original_structure[file], content)
+            else:
+                cleaned_changes[file] = f"New file: {file}\n{content}"
+
         prompt = f"""
         Compare the original project structure to the new project structure after AI code review:
 
         Original structure:
-        {json.dumps(original_structure, indent=2)}
+        {json.dumps(original_structure.keys(), indent=2)}
 
         New structure:
-        {json.dumps(new_structure, indent=2)}
+        {json.dumps(new_structure.keys(), indent=2)}
+
+        Cleaned changes:
+        {json.dumps(cleaned_changes, indent=2)}
 
         Summary of changes made during the review:
         {changes_summary}
@@ -161,6 +181,7 @@ class AIManager:
            - Changes in project structure
            - Updates to usage instructions
            - Any new features or significant modifications
+           - Do NOT include a changelog in the readme file
 
         Format your response as follows:
 

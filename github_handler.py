@@ -10,6 +10,7 @@ from git import Repo
 from github import Github, GithubException
 
 from logger import logger
+from utils import preprocess_ai_response
 
 
 class GitHubHandler:
@@ -128,9 +129,10 @@ class GitHubHandler:
                 if operation == "modify":
                     for file_path, content in details.items():
                         full_path = os.path.join(self.local_path, file_path)
+                        processed_content = preprocess_ai_response(content)
                         os.makedirs(os.path.dirname(full_path), exist_ok=True)
                         with open(full_path, "w", encoding="utf-8") as f:
-                            f.write(content)
+                            f.write(processed_content)
                         repo.index.add([file_path])
                 elif operation == "delete":
                     for file_path in details:
@@ -152,10 +154,13 @@ class GitHubHandler:
 
             if repo.index.diff("HEAD"):
                 commit_message = "AI code review changes"
-                repo.index.commit(commit_message)
+                # Use Git's whitespace handling
+                repo.git.commit("-m", commit_message, "--whitespace=fix")
                 origin = repo.remote(name="origin")
                 origin.push(self.branch_name)
-                logger.info(f"Committed and pushed changes to branch: {self.branch_name}")
+                logger.info(
+                    f"Committed and pushed changes to branch: {self.branch_name}"
+                )
             else:
                 logger.info("No changes to commit")
         except Exception as e:
@@ -165,7 +170,10 @@ class GitHubHandler:
     def create_pull_request(self, title, body):
         try:
             pr = self.repo.create_pull(
-                title=title, body=body, head=self.branch_name, base=self.repo.default_branch
+                title=title,
+                body=body,
+                head=self.branch_name,
+                base=self.repo.default_branch,
             )
             logger.info(f"Created pull request: {pr.html_url}")
             return pr.html_url

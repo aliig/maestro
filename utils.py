@@ -1,16 +1,10 @@
 # utils.py
 
+import difflib
 import os
 import pickle
+import re
 from typing import Dict, List, Tuple
-
-from rich.console import Console
-from rich.prompt import Confirm, Prompt
-
-console = Console()
-
-
-from typing import Dict, Tuple
 
 from rich.console import Console
 from rich.prompt import Confirm, FloatPrompt, Prompt
@@ -161,3 +155,33 @@ def parse_sub_agent_result(result):
             current_content.append(line)
 
     return {k: v for k, v in changes.items() if v}
+
+
+def preprocess_ai_response(content: str) -> str:
+    # Normalize line endings to LF
+    content = content.replace("\r\n", "\n")
+
+    # Remove trailing whitespace from each line
+    content = "\n".join(line.rstrip() for line in content.splitlines())
+
+    # Ensure the file ends with a single newline
+    content = content.rstrip() + "\n"
+
+    return content
+
+
+def clean_diff(old_content: str, new_content: str) -> str:
+    old_lines = old_content.splitlines()
+    new_lines = new_content.splitlines()
+
+    differ = difflib.Differ()
+    diff = list(differ.compare(old_lines, new_lines))
+
+    cleaned_diff = []
+    for line in diff:
+        if line.startswith("  "):  # Unchanged line
+            continue
+        elif line.startswith("- ") or line.startswith("+ "):
+            cleaned_diff.append(line)
+
+    return "\n".join(cleaned_diff)
