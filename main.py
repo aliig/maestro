@@ -73,6 +73,19 @@ def setup_review_environment():
     return github_handler, prompt_manager, ai_manager, change_types, review_depth
 
 
+def parse_orchestrator_response(response):
+    pattern = r"STATUS: (.+)\nNEXT_ACTION: (.+)\nTARGET: (.+)\nREASONING: (.+)"
+    match = re.search(pattern, response, re.DOTALL)
+    if match:
+        return {
+            "status": match.group(1).strip(),
+            "next_action": match.group(2).strip(),
+            "target": match.group(3).strip(),
+            "reasoning": match.group(4).strip(),
+        }
+    return None
+
+
 def perform_code_review(
     github_handler: GitHubHandler,
     prompt_manager: PromptManager,
@@ -102,23 +115,29 @@ def perform_code_review(
             additional_instructions,
         )
         orchestrator_result = ai_manager.call_ai(orchestrator_prompt)
-        logger.info(f"Orchestrator prompt: {orchestrator_prompt}")
-        logger.info(f"Orchestrator result: {orchestrator_result}")
 
-        if "REVIEW_COMPLETE" in orchestrator_result:
+        parsed_result = parse_orchestrator_response(orchestrator_result)
+
+        if not parsed_result:
+            logger.warning(
+                "Failed to parse orchestrator response. Continuing with next iteration."
+            )
+            continue
+
+        if parsed_result["status"] == "COMPLETE":
+            logger.info(
+                "Review process complete. Reason: " + parsed_result["reasoning"]
+            )
             break
 
-        # Check if the AI is requesting file content
-        if "REQUEST_CONTENT:" in orchestrator_result:
-            requested_file = orchestrator_result.split("REQUEST_CONTENT:")[1].split()[0]
-            file_content = github_handler.get_file_content(requested_file)
-            orchestrator_result += (
-                f"\n\nRequested file content for {requested_file}:\n{file_content}\n"
-            )
+        if parsed_result["next_action"] == "REQUEST_CONTENT":
+            file_content = github_handler.get_file_content(parsed_result["target"])
+            orchestrator_result += f"\n\nRequested file content for {parsed_result['target']}:\n{file_content}\n"
 
         sub_agent_prompt = prompt_manager.get_sub_agent_prompt(
             orchestrator_result, repo_structure
         )
+
         logger.info(
             f"Sub-agent prompt: {sub_agent_prompt[:100]}..."
         )  # Log first 100 chars
