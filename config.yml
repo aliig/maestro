@@ -1,0 +1,13 @@
+github_token: "place github token here"
+
+ai_platforms:
+  - provider: "anthropic"
+    model: "claude-3-5-sonnet-20240620"
+    keys:
+    - "place api key(s) here"
+  - provider: "openai"
+    model: "gpt-4"
+    keys:
+    - "place api key(s) here"
+
+max_retries: 3
