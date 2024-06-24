@@ -13,7 +13,6 @@ from tenacity import retry, stop_after_attempt, wait_exponential
 from logger import logger
 from utils import preprocess_ai_response
 
-
 class GitHubHandler:
     def __init__(self, repo_url, token):
         self.g = Github(token)
