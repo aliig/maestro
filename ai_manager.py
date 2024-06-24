@@ -29,12 +29,16 @@ class AnthropicAI(AIInterface):
         self.model = model
 
     def call_ai(self, prompt: str) -> str:
-        response = self.client.messages.create(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=4096,
-        )
-        return response.content[0].text
+        try:
+            response = self.client.messages.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=4096,
+            )
+            return response.content[0].text
+        except Exception as e:
+            logger.error(f"Error calling Anthropic AI: {str(e)}")
+            raise
 
     def get_rate_limit_reset_time(self, error) -> float:
         if isinstance(error, anthropic.RateLimitError):
@@ -57,12 +61,16 @@ class OpenAIGPT(AIInterface):
         self.model = model
 
     def call_ai(self, prompt: str) -> str:
-        response = self.client.chat.completions.create(
-            model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=4096,
-        )
-        return response.choices[0].message.content
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=[{"role": "user", "content": prompt}],
+                max_tokens=4096,
+            )
+            return response.choices[0].message.content
+        except Exception as e:
+            logger.error(f"Error calling OpenAI GPT: {str(e)}")
+            raise
 
     def get_rate_limit_reset_time(self, error) -> float:
         if isinstance(error, openai.RateLimitError):
