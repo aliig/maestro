@@ -1,4 +1,3 @@
-import argparse
 import os
 from typing import Dict, List, Tuple
 
@@ -20,30 +19,10 @@ from utils import (
 
 console = Console()
 
-
-def parse_arguments():
-    parser = argparse.ArgumentParser(description="AI-Powered Code Review")
-    parser.add_argument("repo_url", help="GitHub repository URL")
-    parser.add_argument(
-        "--review_depth",
-        choices=["minimum", "balanced", "comprehensive"],
-        default="balanced",
-    )
-    parser.add_argument(
-        "--config", default="config.yml", help="Path to the configuration file"
-    )
-    parser.add_argument(
-        "--max_file_size",
-        type=int,
-        default=1024 * 1024,
-        help="Maximum file size to review in bytes",
-    )
-    return parser.parse_args()
-
-
-def setup_review_environment(args):
-    config_manager = ConfigManager(args.config)
-    github_handler = GitHubHandler(args.repo_url, config_manager.get_github_token())
+def setup_review_environment():
+    config_manager = ConfigManager("config.yml")
+    repo_url = console.input("Enter the GitHub repository URL: ")
+    github_handler = GitHubHandler(repo_url, config_manager.get_github_token())
 
     # Set default patterns if not provided
     include_patterns = [
@@ -65,15 +44,15 @@ def setup_review_environment(args):
 
     github_handler.include_patterns = include_patterns
     github_handler.exclude_patterns = exclude_patterns
-    github_handler.max_file_size = args.max_file_size
+    github_handler.max_file_size = config_manager.get_value("max_file_size", 1024 * 1024)
 
     prompt_manager = PromptManager("prompts.yml")
-    ai_manager = AIManager(config_manager, args.review_depth)
+    review_depth = console.input("Enter review depth (minimum/balanced/comprehensive) [balanced]: ") or "balanced"
+    ai_manager = AIManager(config_manager, review_depth)
 
     change_types = get_user_preferences()
 
-    return github_handler, prompt_manager, ai_manager, change_types
-
+    return github_handler, prompt_manager, ai_manager, change_types, review_depth
 
 def perform_code_review(
     github_handler: GitHubHandler,
@@ -140,18 +119,14 @@ def perform_code_review(
 
     return changes_summary, [original_structure, original_readme]
 
-
 def main():
-    args = parse_arguments()
-    logger.info(f"Starting AI-Powered Code Review for {args.repo_url}")
+    logger.info("Starting AI-Powered Code Review")
 
-    github_handler, prompt_manager, ai_manager, change_types = setup_review_environment(
-        args
-    )
+    github_handler, prompt_manager, ai_manager, change_types, review_depth = setup_review_environment()
 
     try:
         changes_summary, original_data = perform_code_review(
-            github_handler, prompt_manager, ai_manager, change_types, args.review_depth
+            github_handler, prompt_manager, ai_manager, change_types, review_depth
         )
 
         logger.info("Code review complete!")
@@ -179,7 +154,6 @@ def main():
         logger.info("Temporary files cleaned up. Review process finished.")
         if os.path.exists("review_checkpoint.pkl"):
             os.remove("review_checkpoint.pkl")
-
 
 if __name__ == "__main__":
     main()
