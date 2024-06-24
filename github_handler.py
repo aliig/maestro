@@ -46,6 +46,13 @@ class GitHubHandler:
         current.checkout()
         logger.info(f"Created and checked out new branch: {self.branch_name}")
 
+    def get_file_content(self, file_path):
+        full_path = os.path.join(self.local_path, file_path)
+        if os.path.exists(full_path) and self.should_include_file(file_path):
+            with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
+                return f.read()
+        return "File not found or not accessible"
+
     def get_repo_structure(self):
         structure = {}
         for root, dirs, files in os.walk(self.local_path):

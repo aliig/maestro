@@ -10,6 +10,8 @@ orchestrator:
     Repository structure:
     {repo_structure}
 
+    This structure shows file paths and sizes. To review a specific file's content, include "REQUEST_CONTENT: filepath" in your response, e.g., "REQUEST_CONTENT: ai_manager.py".
+
     Previous review results:
     {previous_results}
 
