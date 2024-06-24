@@ -46,21 +46,18 @@ class GitHubHandler:
         current.checkout()
         logger.info(f"Created and checked out new branch: {self.branch_name}")
 
-    def is_binary_file(self, file_path):
-        with open(file_path, "rb") as file:
-            chunk = file.read(1024)  # Read first 1024 bytes
-            result = chardet.detect(chunk)
-            if result["encoding"] is None:
-                return True
-            return False
-
     def get_repo_structure(self):
         structure = {}
         for root, dirs, files in os.walk(self.local_path):
+            # Skip .git directory
+            if ".git" in dirs:
+                dirs.remove(".git")
+
             path = root.split(os.sep)
             current_level = structure
             for folder in path[path.index(os.path.basename(self.local_path)) + 1 :]:
                 current_level = current_level.setdefault(folder, {})
+
             for file in files:
                 if self.should_include_file(file):
                     file_path = os.path.join(root, file)
@@ -76,15 +73,31 @@ class GitHubHandler:
                             current_level[file] = content
                         except UnicodeDecodeError:
                             # If we still can't decode it, skip this file
-                            pass
+                            current_level[file] = (
+                                "<<< Unable to decode file content >>>"
+                            )
+                    else:
+                        current_level[file] = "<<< File too large or binary >>>"
         return structure
 
     def should_include_file(self, filename):
+        # Check if the file should be included based on include/exclude patterns
         return any(
-            fnmatch.fnmatch(filename, pattern) for pattern in self.include_patterns
+            self._match_pattern(filename, pattern) for pattern in self.include_patterns
         ) and not any(
-            fnmatch.fnmatch(filename, pattern) for pattern in self.exclude_patterns
+            self._match_pattern(filename, pattern) for pattern in self.exclude_patterns
         )
+
+    def _match_pattern(self, filename, pattern):
+        return fnmatch.fnmatch(filename, pattern)
+
+    def is_binary_file(self, file_path):
+        try:
+            with open(file_path, "tr") as check_file:
+                check_file.read()
+                return False
+        except:
+            return True
 
     def commit_changes(self, changes):
         repo = Repo(self.local_path)

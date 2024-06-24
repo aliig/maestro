@@ -1,10 +1,11 @@
 orchestrator:
   base: |
     Review the following GitHub repository structure and provide the next code review task.
-    Focus on {focus_areas}.
+    Focus most on {focus_areas}.
     {ignore_areas}
     Be concise and prioritize the most important issues.
     Review depth: {review_depth}
+    Your response will not be read by a human, but rather reviewed by AI sub agents, so you do not need to be verbose.
 
     Repository structure:
     {repo_structure}
@@ -22,7 +23,7 @@ orchestrator:
     security: "identifying and addressing security vulnerabilities"
     code_quality: "improving overall code quality and readability"
 
-  ignore_message: "Do not focus on {ignore_areas}."
+  ignore_message: "Focus less on {ignore_areas}."
 
   review_depths:
     minimum: "Provide a quick overview of the most critical issues."
