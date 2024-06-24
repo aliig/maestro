@@ -34,6 +34,11 @@ class AnthropicAI(AIInterface):
         self.client = anthropic.Anthropic(api_key=api_key)
         self.model = model
 
+    @retry(
+        retry=retry_if_exception_type((anthropic.APIError, anthropic.APIConnectionError)),
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=4, max=60),
+    )
     def call_ai(self, prompt: str) -> str:
         try:
             response = self.client.messages.create(
@@ -42,8 +47,14 @@ class AnthropicAI(AIInterface):
                 max_tokens=4096,
             )
             return response.content[0].text
-        except Exception as e:
+        except anthropic.RateLimitError as e:
+            logger.warning(f"Rate limit reached for Anthropic AI. Retrying in {self.get_rate_limit_reset_time(e)} seconds.")
+            raise
+        except (anthropic.APIError, anthropic.APIConnectionError) as e:
             logger.error(f"Error calling Anthropic AI: {str(e)}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error calling Anthropic AI: {str(e)}")
             raise
 
     def get_rate_limit_reset_time(self, error) -> float:
@@ -66,6 +77,11 @@ class OpenAIGPT(AIInterface):
         self.client = openai.OpenAI(api_key=api_key)
         self.model = model
 
+    @retry(
+        retry=retry_if_exception_type((openai.APIError, openai.APIConnectionError)),
+        stop=stop_after_attempt(5),
+        wait=wait_exponential(multiplier=1, min=4, max=60),
+    )
     def call_ai(self, prompt: str) -> str:
         try:
             response = self.client.chat.completions.create(
@@ -74,8 +90,14 @@ class OpenAIGPT(AIInterface):
                 max_tokens=4096,
             )
             return response.choices[0].message.content
-        except Exception as e:
+        except openai.RateLimitError as e:
+            logger.warning(f"Rate limit reached for OpenAI GPT. Retrying in {self.get_rate_limit_reset_time(e)} seconds.")
+            raise
+        except (openai.APIError, openai.APIConnectionError) as e:
             logger.error(f"Error calling OpenAI GPT: {str(e)}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error calling OpenAI GPT: {str(e)}")
             raise
 
     def get_rate_limit_reset_time(self, error) -> float:
@@ -112,37 +134,19 @@ class AIManager:
 
         return ai_platforms
 
-    @retry(
-        retry=retry_if_exception_type(
-            (anthropic.RateLimitError, openai.RateLimitError)
-        ),
-        stop=stop_after_attempt(3),
-        wait=wait_exponential(multiplier=1, min=4, max=10),
-    )
-    def _call_ai_with_retry(self, platform, prompt: str):
-        try:
-            return platform.call_ai(prompt)
-        except (anthropic.RateLimitError, openai.RateLimitError) as e:
-            wait_time = platform.get_rate_limit_reset_time(e)
-            logger.warning(
-                f"Rate limit reached for {platform.__class__.__name__}. Waiting time: {wait_time:.2f} seconds."
-            )
-            time.sleep(min(wait_time, 60))
-            raise  # Re-raise the exception to trigger a retry
-        except Exception as e:
-            logger.error(
-                f"Error calling AI platform {platform.__class__.__name__}: {str(e)}"
-            )
-            raise  # Re-raise the exception to trigger a retry
-
     def call_ai(self, prompt: str) -> str:
         for _ in range(len(self.ai_platforms)):
             current_platform = self.platform_queue[0]
             try:
-                result = self._call_ai_with_retry(current_platform, prompt)
+                result = current_platform.call_ai(prompt)
                 return result
+            except (anthropic.RateLimitError, openai.RateLimitError) as e:
+                wait_time = current_platform.get_rate_limit_reset_time(e)
+                logger.warning(f"Rate limit reached for {current_platform.__class__.__name__}. Waiting {wait_time} seconds.")
+                time.sleep(wait_time)
+                self.platform_queue.rotate(-1)  # Move the current platform to the end
             except Exception as e:
-                logger.warning(f"Error {e}")
+                logger.error(f"Error using {current_platform.__class__.__name__}: {str(e)}")
                 self.platform_queue.rotate(-1)  # Move the current platform to the end
 
         raise Exception("All AI platforms exhausted. Unable to complete the request.")
