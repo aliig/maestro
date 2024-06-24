@@ -108,6 +108,14 @@ def perform_code_review(
         if "REVIEW_COMPLETE" in orchestrator_result:
             break
 
+        # Check if the AI is requesting file content
+        if "REQUEST_CONTENT:" in orchestrator_result:
+            requested_file = orchestrator_result.split("REQUEST_CONTENT:")[1].split()[0]
+            file_content = github_handler.get_file_content(requested_file)
+            orchestrator_result += (
+                f"\n\nRequested file content for {requested_file}:\n{file_content}\n"
+            )
+
         sub_agent_prompt = prompt_manager.get_sub_agent_prompt(
             orchestrator_result, repo_structure
         )
